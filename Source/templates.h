@@ -29,3 +29,10 @@ void Test_SymRecCompress(int n, double *H, double *H1, double *H2, int ldh);
 int compare_str(int n, char *s1, char *s2);
 
 void SymResRestore(int n, double *H1, double *H2, int ldh, int p);
+
+// Solver
+
+void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3,
+	/* output */ double *D, int ldd, double *B, int ldb, double *x1, double *f);
+void Block3DSPDSolveFast(double *D, int ldd, double *B, int ldb, double *f, double thresh, int smallsize, int ItRef, char *bench,
+	/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount);

@@ -8,10 +8,10 @@ void print(int m, int n, double *u, int ldu)
 		for (int j = 0; j < n; j++)
 		{
 			printf("%5.3lf ", u[i + ldu*j]);
-			if (j % N == N - 1) printf("|");
+			//if (j % N == N - 1) printf("|");
 		}
 		printf("\n");
-		if (i % N == N - 1) printf("\n");
+		//if (i % N == N - 1) printf("\n");
 	}
 	
 }
@@ -20,6 +20,10 @@ void print(int m, int n, double *u, int ldu)
 double* alloc_arr(int n)
 {
 	double *f = (double*)malloc(n * sizeof(double));
+
+#pragma omp parallel for
+	for (int i = 0; i < n; i++)
+		f[i] = 0;
 
 	return f;
 }
@@ -444,6 +448,38 @@ int compare_str(int n, char *s1, char *s2)
 	return 1;
 }
 
+void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered */, int ldh, int small_size)
+{
+	int n1, n2;
+	double alpha = 1.0;
+	double beta = 0.0;
+	char notrans = 'N';
+	char trans = 'T';
+	char left = 'L';
+	char right = 'R';
+
+	n2 = (int)ceil(n / 2.0); // округление в большую сторону
+	n1 = n - n2;           
+
+	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
+	{
+		dlacpy("All", &n, &n, H1, &ldh, H2, &ldh);
+		return;
+	}
+	else
+	{
+		// A21 = A21 * A12
+		dgemm(&notrans, &notrans, &n2, &n1, &n1, &alpha, &H1[n1 + ldh * 0], &ldh, &H1[0 + ldh * n1], &ldh, &beta, &H2[n1 + ldh * 0], &ldh);
+
+		// A12 = A21*T = A12*T * A21*T
+		dgemm(&trans, &trans, &n1, &n2, &n1, &alpha, &H1[0 + ldh * n1], &ldh, &H1[n1 + ldh * 0], &ldh, &beta, &H2[0 + ldh * n1], &ldh);
+	
+
+		SymResRestore(n1, &H1[0 + ldh * 0], &H2[0 + ldh * 0], ldh, small_size);
+		SymResRestore(n2, &H1[n1 + ldh * n1], &H2[n1 + ldh * n1], ldh, small_size);
+	}
+}
+
 void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh)
 {
 	int small_size = 3;
@@ -483,34 +519,16 @@ void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh
 
 }
 
-void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered */, int ldh, int small_size)
+
+// Test for the whole solver
+
+void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double *D, int ldd, double *B, int ldb, double *x1, double *f)
 {
-	int n1, n2;
-	double alpha = 1.0;
-	double beta = 0.0;
-	char notrans = 'N';
-	char trans = 'T';
-	char left = 'L';
-	char right = 'R';
 
-	n2 = (int)ceil(n / 2.0); // округление в большую сторону
-	n1 = n - n2;           
+}
 
-	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
-	{
-		dlacpy("All", &n, &n, H1, &ldh, H2, &ldh);
-		return;
-	}
-	else
-	{
-		// A21 = A21 * A12
-		dgemm(&notrans, &notrans, &n2, &n1, &n1, &alpha, &H1[n1 + ldh * 0], &ldh, &H1[0 + ldh * n1], &ldh, &beta, &H2[n1 + ldh * 0], &ldh);
+void Block3DSPDSolveFast(double *D, int ldd, double *B, int ldb, double *f, double thresh, int smallsize, int ItRef, char *bench,
+			/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount)
+{
 
-		// A12 = A21*T = A12*T * A21*T
-		dgemm(&trans, &trans, &n1, &n2, &n1, &alpha, &H1[0 + ldh * n1], &ldh, &H1[n1 + ldh * 0], &ldh, &beta, &H2[0 + ldh * n1], &ldh);
-	
-
-		SymResRestore(n1, &H1[0 + ldh * 0], &H2[0 + ldh * 0], ldh, small_size);
-		SymResRestore(n2, &H1[n1 + ldh * n1], &H2[n1 + ldh * n1], ldh, small_size);
-	}
 }

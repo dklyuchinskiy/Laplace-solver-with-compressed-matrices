@@ -8,7 +8,8 @@
 
 #include "templates.h"
 
-#define PROBLEM 1
+#define PROBLEM 2
+
 
 #define N 10
 

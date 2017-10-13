@@ -77,6 +77,63 @@ int main()
 		}
 	print(n, n, H1, ldh);
 	Test_SymRecCompress(n, H, H1, H2, ldh);
+#elif (PROBLEM == 2)
+	int n1 = 40; // number of point across the directions
+	int n2 = 40;
+	int n3 = 10;
+	int n = n1 * n2; // size of blocks
+	int NB = n3; // number of blocks
+	int size = n2 * NB; // size of vector x and f
+	int smallsize = 400;
+	double thresh = 1e-6; // stop level of algorithm by relative error
+	int ItRef = 100; // Maximal number of iterations in refirement
+	char bench[255] = "display"; // parameter into solver to show internal results
+
+	// init
+	double *D = alloc_arr(1);
+	double *B = alloc_arr(1);
+	double *x1 = alloc_arr(size);
+	double *f = alloc_arr(size);
+
+	// result obtained
+	double *G = alloc_arr(1);
+	double *x = alloc_arr(size);
+
+	int ldd = 0;
+	int ldb = 0;
+	int ldg = 0;
+
+	int success = 0;
+	int itcount = 0;
+	double RelRes;
+
+	// Generation matrix of coefficients, vector of solution (to compare with obtained) and vector of RHS
+	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, ldb, x1, f);
+
+	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
+	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
+	printf("Compressed blocks method\n");
+	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
+
+	// Calling the solver
+	Block3DSPDSolveFast(D, ldd, B, ldb, f, thresh, smallsize, ItRef, bench, G, ldg, x, success, RelRes, itcount);
+
+	printf("success=%d, itcount=%d\n", success, itcount);
+	printf("-----------------------------------\n");
+	printf("Computing error\n");
+	
+	double normx = 0;
+	double normy = 0;
+	int ione = 1;
+
+#pragma omp parallel for
+	for (int i = 0; i < size; i++)
+		x[i] -= x1[i];
+
+	normy = dnrm2(&size, x, &ione);
+	normx = dnrm2(&size, x1, &ione);
+
+	printf("relative error %lf\n", normy/normx);
 
 #endif
 	system("pause");
