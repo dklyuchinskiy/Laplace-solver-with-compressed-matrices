@@ -14,3 +14,18 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 
 double* alloc_arr(int n);
 void free_arr(double* *arr);
+
+// HSS
+
+void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
+	const int small_size,
+	char *method /* SVD or other */);
+
+void LowRankApprox(char *method, int small_size, int n2, int n1 /* size of A21 = A */,
+	double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv);
+
+void Test_SymRecCompress(int n, double *H, double *H1, double *H2, int ldh);
+
+int compare_str(int n, char *s1, char *s2);
+
+void SymResRestore(int n, double *H1, double *H2, int ldh, int p);

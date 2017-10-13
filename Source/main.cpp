@@ -4,6 +4,8 @@
 
 int main()
 {
+
+#if (PROBLEM == 0)
 	int n2 = N * N;
 	int n3 = 3 * N;
 	int nbl = N;
@@ -56,6 +58,27 @@ int main()
 
 	free(ipiv_mat);
 
+#elif (PROBLEM == 1)
+	int n = N;
+	double *H = new double[n*n]; // init
+	double *H1 = new double[n*n]; // compressed
+	double *H2 = new double[n*n]; // recovered init
+
+	H[0:n*n] = 0;
+	H1[0:n*n] = 0;
+	H2[0:n*n] = 0;
+
+	int ldh = n;
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+		{
+			H[i + ldh * j] = 1.0 / (i + j + 1);
+			H1[i + ldh * j] = 1.0 / (i + j + 1);
+		}
+	print(n, n, H1, ldh);
+	Test_SymRecCompress(n, H, H1, H2, ldh);
+
+#endif
 	system("pause");
 
 	return 0;

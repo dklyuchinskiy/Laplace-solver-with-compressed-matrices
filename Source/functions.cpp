@@ -7,7 +7,7 @@ void print(int m, int n, double *u, int ldu)
 	{
 		for (int j = 0; j < n; j++)
 		{
-			printf("%4.1lf ", u[i + ldu*j]);
+			printf("%5.3lf ", u[i + ldu*j]);
 			if (j % N == N - 1) printf("|");
 		}
 		printf("\n");
@@ -344,4 +344,173 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 	printf("U_full\n");
 	print(n2, n2, U_f, lduf);
 #endif
+}
+
+// ---------- Compressed matrices --------------
+
+void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,  
+	const int small_size,
+	char *method /* SVD or other */)
+{
+	int ldu, ldv;
+
+	if (n <= small_size)
+	{
+		return;
+	}
+	else 
+	{
+		int n1, n2; // error 3  - неправильное выделение подматриц - похоже на проблему 2
+		n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		n1 = n - n2; // n2 > n1
+
+#ifdef DEBUG
+		printf("SymRecCompress: n = %d n1 = %d n2 = %d\n", n, n1, n2);
+#endif
+
+		// LowRank A21
+		LowRankApprox(method, small_size, n2, n1, &A[n1 + lda * 0], lda, &A[0 + lda * n1], lda);
+
+		SymRecCompress(n1, &A[0 + lda * 0], lda, small_size, method);
+		SymRecCompress(n2, &A[n1 + lda * n1], lda, small_size, method);
+	}
+}
+
+void LowRankApprox(char *method, int small_size, int n2, int n1 /* size of A21 = A */,
+					double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv)
+{
+	char over = 'O';
+	char all = 'A';
+	char sing = 'S';
+	int mn = min(n1, n2);
+	double *S = new double[mn];
+	int info = 0;
+	int lwork = -1;
+	double wkopt;
+	int p = 0; // число значимых сингулярных чисел
+	double *work;
+
+	if (compare_str(3, method, "SVD"))
+	{
+		// query 
+		dgesvd(&over, &sing, &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, &wkopt, &lwork, &info); // first V - not referenced
+		lwork = (int)wkopt;
+		work = (double*)malloc(lwork * sizeof(double));
+		// error 1
+
+		// A = U1 * S * V1
+		dgesvd(&over, &sing, &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, work, &lwork, &info); // first V - not referenced
+		// error 2 (как mkl складывает вектора columnwise)
+
+		for (int j = 0; j < min(n1, n2); j++)
+		{
+			double s1 = S[j] / S[0];
+			if (s1 < eps)
+			{
+				break;
+			}
+			p = j + 1;
+			for (int i = 0; i < n2; i++)
+				A[i + lda * j] *= S[j];
+		}
+
+#ifdef DEBUG
+		printf("for n1 = %d, n2 = %d, p = %d\n", n1, n2, p);
+#endif
+		for (int j = p; j < n1; j++)   // original part: [n2 x n1]
+			for (int i = 0; i < n2; i++)
+				A[i + lda * j] = 0;
+
+		for (int j = 0; j < n2; j++)   // transposed part: [n1 x n2]
+			for (int i = p; i < n1; i++)
+				V[i + lda * j] = 0;
+
+		free(work);
+	}
+	else
+	{
+		return;
+	}
+
+	free(S);
+}
+
+int compare_str(int n, char *s1, char *s2)
+{
+	for (int i = 0; i < n; i++)
+	{
+		if (s1[i] != s2[i]) return 0;
+	}
+	return 1;
+}
+
+void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh)
+{
+	int small_size = 3;
+	char frob = 'F';
+	double norm = 0;
+	SymRecCompress(n, H1, ldh, small_size, "SVD");
+	SymResRestore(n, H1, H2, ldh, small_size);
+
+#ifdef DEBUG
+	printf("H1 compressed");
+	print(n, n, H1, ldh);
+	printf("H recovered\n");
+	print(n, n, H2, ldh);
+#endif
+
+	// Norm of residual || A - L * U ||
+	for (int j = 0; j < n; j++)
+	{
+		for (int i = 0; i < n; i++)
+		{
+			H2[i + ldh * j] = H2[i + ldh * j] - H[i + ldh * j];
+
+		}
+	}
+
+#ifdef DEBUG
+	printf("H init\n");
+	print(n, n, H, ldh);
+	printf("diff\n");
+	print(n, n, H2, ldh);
+#endif
+
+	norm = dlange(&frob, &n, &n, H2, &ldh, NULL);
+	norm = norm / dlange(&frob, &n, &n, H, &ldh, NULL);
+	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
+
+}
+
+void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered */, int ldh, int small_size)
+{
+	int n1, n2;
+	double alpha = 1.0;
+	double beta = 0.0;
+	char notrans = 'N';
+	char trans = 'T';
+	char left = 'L';
+	char right = 'R';
+
+	n2 = (int)ceil(n / 2.0); // округление в большую сторону
+	n1 = n - n2;           
+
+	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
+	{
+		dlacpy("All", &n, &n, H1, &ldh, H2, &ldh);
+		return;
+	}
+	else
+	{
+		// A21 = A21 * A12
+		dgemm(&notrans, &notrans, &n2, &n1, &n1, &alpha, &H1[n1 + ldh * 0], &ldh, &H1[0 + ldh * n1], &ldh, &beta, &H2[n1 + ldh * 0], &ldh);
+
+		// A12 = A21*T = A12*T * A21*T
+		dgemm(&trans, &trans, &n1, &n2, &n1, &alpha, &H1[0 + ldh * n1], &ldh, &H1[n1 + ldh * 0], &ldh, &beta, &H2[0 + ldh * n1], &ldh);
+	
+
+		SymResRestore(n1, &H1[0 + ldh * 0], &H2[0 + ldh * 0], ldh, small_size);
+		SymResRestore(n2, &H1[n1 + ldh * n1], &H2[n1 + ldh * n1], ldh, small_size);
+	}
 }
