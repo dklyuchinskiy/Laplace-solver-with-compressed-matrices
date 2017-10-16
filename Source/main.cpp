@@ -78,20 +78,21 @@ int main()
 	print(n, n, H1, ldh);
 	Test_SymRecCompress(n, H, H1, H2, ldh);
 #elif (PROBLEM == 2)
-	int n1 = 40; // number of point across the directions
-	int n2 = 40;
-	int n3 = 10;
+	int n1 = 4; // number of point across the directions
+	int n2 = 4;
+	int n3 = 4;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
-	int size = n2 * NB; // size of vector x and f
+	int size = n * NB; // size of vector x and f: n1 * n2 * n3
 	int smallsize = 400;
 	double thresh = 1e-6; // stop level of algorithm by relative error
 	int ItRef = 100; // Maximal number of iterations in refirement
 	char bench[255] = "display"; // parameter into solver to show internal results
+	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
 
 	// init
-	double *D = alloc_arr(1);
-	double *B = alloc_arr(1);
+	double *D = alloc_arr(sparse_size * NB);
+	double *B = alloc_arr(size - NB);
 	double *x1 = alloc_arr(size);
 	double *f = alloc_arr(size);
 
@@ -110,6 +111,8 @@ int main()
 	// Generation matrix of coefficients, vector of solution (to compare with obtained) and vector of RHS
 	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, ldb, x1, f);
 
+	print_vec(size, x1, f, "vector x1 and f");
+
 	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
 	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
 	printf("Compressed blocks method\n");
@@ -125,7 +128,7 @@ int main()
 	double normx = 0;
 	double normy = 0;
 	int ione = 1;
-
+/*
 #pragma omp parallel for
 	for (int i = 0; i < size; i++)
 		x[i] -= x1[i];
@@ -133,7 +136,7 @@ int main()
 	normy = dnrm2(&size, x, &ione);
 	normx = dnrm2(&size, x1, &ione);
 
-	printf("relative error %lf\n", normy/normx);
+	printf("relative error %lf\n", normy/normx);*/
 
 #endif
 	system("pause");

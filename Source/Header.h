@@ -4,9 +4,15 @@
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include <iostream>
+#include <map>
+#include <vector>
 #include "mkl.h"
+using namespace std;
 
+#include <time.h>
 #include "templates.h"
+
 
 #define PROBLEM 2
 

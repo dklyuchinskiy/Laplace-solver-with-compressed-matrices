@@ -7,7 +7,7 @@ void print(int m, int n, double *u, int ldu)
 	{
 		for (int j = 0; j < n; j++)
 		{
-			printf("%5.3lf ", u[i + ldu*j]);
+			printf("%5.2lf ", u[i + ldu*j]);
 			//if (j % N == N - 1) printf("|");
 		}
 		printf("\n");
@@ -524,6 +524,92 @@ void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh
 
 void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double *D, int ldd, double *B, int ldb, double *x1, double *f)
 {
+	// 1. Аппроксимация двумерной плоскости
+
+	int n = n1 * n2; // size of blocks
+	int nbr = n3; // number of blocks in one row
+	int NBF = nbr * nbr; // full number of blocks in matrix
+	double *DD = alloc_arr(n * n); // память под двумерный диагональный блок
+	int lddd = n;
+
+	// переделать все это размеры
+
+	// size DD
+	int m0 = n;
+	int n0 = n;
+
+	// diagonal blocks in dense format
+	for (int i = 0; i < n; i++)
+		DD[i + lddd * i] = 6.0;
+
+	for (int j = 1; j < n; j++)  // count - until the end
+	{
+		DD[j + lddd * (j - 1)] = -1.0;
+		DD[j - 1 + lddd * j] = -1.0;
+	}
+
+	for (int j = n1; j < n; j++) // count - until the end
+	{
+		DD[j + lddd * (j - n1)] = -1.0;
+		DD[j - n1 + lddd * j] = -1.0;
+	}
+
+	print(n, n, DD, lddd);
+
+	// packing into sparse format
+	// 5 diagonal matrix with size n2 * nbr + 2 * (n2 * nbr - 1) + 2 * (n2 * nbr - n1)
+
+	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
+	double *d = (double*)malloc(sparse_size * sizeof(double));
+	int *i_ind = (int*)malloc(sparse_size * sizeof(int));
+	int *j_ind = (int*)malloc(sparse_size * sizeof(int));
+
+	printf("sparse_size = %d\n", sparse_size);
+	map<vector<int>, double> SD;
+	SD = dense_to_sparse(n, n, DD, lddd, i_ind, j_ind, d);
+	print_map(SD);
+	free(DD);
+
+	// Using only sparse matrix D - for 3D. Transfer each 2D block SD to 3D matrix D
+
+	srand((unsigned int)time(0));
+	for (int j = 0; j < nbr; j++)
+		for (int i = 0; i < n; i++)
+	{
+			x1[i + n * j] = random(0.0, 1.0);
+			if (j < nbr - 1) B[i + n * j] = -1.0;
+	}
+
+	// f[i + n * 0]
+	// попробуем использовать один и тот же 2D вектор SD для всех блоков NB
+	for (int i = 0; i < n; i++)
+	{
+		f[i + n * 0] += B[i + n * 0] * x1[i + n * 1]; // f[1]
+		f[i + n * (nbr - 1)] = B[i + n * (nbr - 2)] * x1[i + n * (nbr - 2)]; // f[NB]
+		for (int j = 0; j < n; j++)
+		{
+			vector<int> vect = { i,  j };
+			if (SD.count(vect))
+			{
+				f[i + n * 0] += SD[vect] * x1[j + n * 0];
+				f[i + n * (nbr - 1)] += SD[vect] * x1[j + n * (nbr - 1)];
+			}
+		}
+	}
+
+	for (int blk = 1; blk < nbr - 1; blk++)
+		for (int i = 0; i < n; i++)
+		{
+			f[i + n * blk] += B[i + n * (blk - 1)] * x1[i + n * (blk - 1)] + B[i + n * blk] * x1[i + n * (blk + 1)]; ;
+			for (int j = 0; j < n; j++)
+			{
+				vector<int> vect = { i,  j };
+				if (SD.count(vect))
+				{
+					f[i + n * blk] += SD[vect] * x1[j + n * blk];
+				}
+			}
+	}
 
 }
 
@@ -531,4 +617,47 @@ void Block3DSPDSolveFast(double *D, int ldd, double *B, int ldb, double *f, doub
 			/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount)
 {
 
+}
+
+map<vector<int>,double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d)
+{
+	map<vector<int>, double> SD;
+	vector<int> v(2);
+	double thresh = 1e-8;
+	int k = 0;
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < m; i++)
+			if (fabs(DD[i + ldd * j]) != 0)
+			{
+				d[k] = DD[i + ldd * j];
+				i_ind[k] = i;
+				j_ind[k] = j;
+
+				v[0] = i;
+				v[1] = j;
+				SD[v] = DD[i + ldd * j];
+
+				k++;
+			}
+
+	return SD;
+}
+
+void print_map(const map<vector<int>, double>& SD)
+{
+	cout << SD.size() << endl;
+	for (const auto& item : SD)
+		cout << "m = " << item.first[0] << " n = " << item.first[1] << " value = " << item.second << endl;
+}
+
+double random(double min, double max)
+{
+	return (double)(rand()) / RAND_MAX * (max - min) + min;
+}
+
+void print_vec(int size, double *vec1, double *vec2, char *name)
+{
+	printf("%s\n", name);
+	for (int i = 0; i < size; i++)
+		printf("%d   %lf   %lf\n", i, vec1[i], vec2[i]);
 }

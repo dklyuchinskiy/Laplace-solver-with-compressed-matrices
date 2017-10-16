@@ -36,3 +36,11 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3,
 	/* output */ double *D, int ldd, double *B, int ldb, double *x1, double *f);
 void Block3DSPDSolveFast(double *D, int ldd, double *B, int ldb, double *f, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount);
+
+map<vector<int>,double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);
+
+void print_map(const map<vector<int>,double>& SD);
+
+double random(double min, double max);
+
+void print_vec(int size, double *vec1, double *vec2, char *name);
