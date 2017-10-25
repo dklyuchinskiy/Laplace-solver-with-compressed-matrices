@@ -14,7 +14,7 @@ using namespace std;
 #include "templates.h"
 
 
-#define PROBLEM 2
+#define PROBLEM 6
 
 
 #define N 10
@@ -23,7 +23,7 @@ using namespace std;
 #define DEBUG
 #endif
 
-#define eps 0.00000001
+#define EPS 0.00000001
 
 #define min(a,b) ((a) <= (b)) ? (a) : (b)
 

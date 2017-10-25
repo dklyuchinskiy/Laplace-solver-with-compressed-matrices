@@ -72,10 +72,10 @@ int main()
 	for (int j = 0; j < n; j++)
 		for (int i = 0; i < n; i++)
 		{
-			H[i + ldh * j] = 1.0 / (i + j + 1);
-			H1[i + ldh * j] = 1.0 / (i + j + 1);
+			H[i + ldh * j] = 1.0 / (i * i + j * j + 1);
+			H1[i + ldh * j] = 1.0 / (i * i + j * j + 1);
 		}
-	print(n, n, H1, ldh);
+	print(n, n, H1, ldh, "H1");
 	Test_SymRecCompress(n, H, H1, H2, ldh);
 #elif (PROBLEM == 2)
 	int n1 = 4; // number of point across the directions
@@ -92,7 +92,7 @@ int main()
 
 	// init
 	double *D = alloc_arr(sparse_size * NB);
-	double *B = alloc_arr(size - NB);
+	double *B = alloc_arr(size - NB); // vector of diagonal elements
 	double *x1 = alloc_arr(size);
 	double *f = alloc_arr(size);
 
@@ -106,7 +106,7 @@ int main()
 
 	int success = 0;
 	int itcount = 0;
-	double RelRes;
+	double RelRes = 0;
 
 	// Generation matrix of coefficients, vector of solution (to compare with obtained) and vector of RHS
 	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, ldb, x1, f);
@@ -119,7 +119,7 @@ int main()
 	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
 
 	// Calling the solver
-	Block3DSPDSolveFast(D, ldd, B, ldb, f, thresh, smallsize, ItRef, bench, G, ldg, x, success, RelRes, itcount);
+	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, ldb, f, thresh, smallsize, ItRef, bench, G, ldg, x, success, RelRes, itcount);
 
 	printf("success=%d, itcount=%d\n", success, itcount);
 	printf("-----------------------------------\n");
@@ -128,6 +128,8 @@ int main()
 	double normx = 0;
 	double normy = 0;
 	int ione = 1;
+
+
 /*
 #pragma omp parallel for
 	for (int i = 0; i < size; i++)
@@ -137,6 +139,50 @@ int main()
 	normx = dnrm2(&size, x1, &ione);
 
 	printf("relative error %lf\n", normy/normx);*/
+
+#elif (PROBLEM == 3)
+	int n = 10;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	// Test compress relative error of Hd and H2
+	Test_DiagMult(n, eps, method, smallsize);
+
+#elif (PROBLEM == 4)
+	int n = 5;
+	int k = 6;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	// Test compress relative error of Y1(recovered) and Y (init)
+	Test_RecMultL(n, k, eps, method, smallsize);
+#elif (PROBLEM == 5)
+	int m = 8;
+	int n = 10;
+	double eps = 1e-5;
+	char method[255] = "SVD";
+
+	Test_LowRankApprox_InitA(m, n, eps, method);
+#elif (PROBLEM == 6)
+	int n = 10;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
+	double alpha = 1.0;
+	double beta = -1.0;
+
+	Test_add(n, alpha, beta, smallsize, eps, method);
+
+#elif (PROBLEM == 7)
+	int m = 3;
+	int n = 4;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	Test_transpose(m, n, smallsize, eps, method);
 
 #endif
 	system("pause");
