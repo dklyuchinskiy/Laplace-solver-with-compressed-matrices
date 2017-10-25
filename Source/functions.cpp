@@ -1060,64 +1060,36 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 		double *V12 = alloc_arr(n1_dbl * n2); // p <= n2
 		int ldv12 = n1_dbl;
 
-		double *help = alloc_arr(n2 * n1_dbl); // p <= n2
-		int ldhe = n2;
-
-		double *help2 = alloc_arr(n1_dbl * n2); // p <= n2
-		int ldhe2 = n1_dbl;
-
-		double *help3 = alloc_arr(n2 * n1); // p <= n2
-		int ldhe3 = n2;
-
 		// Y = V21'*V12;
 		double *Y = alloc_arr(mn * mn); int ldy = mn;
 
 		Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
 		Add_dense(n2, n1, beta, &B[n1 + lda * 0], ldb, 0.0, B, ldb, &B[n1 + lda * 0], ldb);
 
-
 		// Y21 = [alpha*A{2,1} beta*B{2,1}];
 		dlacpy("All", &n2, &n1, &A[n1 + lda * 0], &lda, &Y21[0 + ldy21 * 0], &ldy21);
 		dlacpy("All", &n2, &n1, &B[n1 + ldb * 0], &ldb, &Y21[0 + ldy21 * n1], &ldy21);
 
-		print(n2, n1_dbl, &Y21[0 + ldy21 * 0], ldy21, "Y21");
 		LowRankApprox("SVD", n2, n1_dbl, Y21, ldy21, V21, ldv21, p); // перезапись Y21
-		print(n2, n1_dbl, Y21, ldy21, "U21 after low of Y12");
-		print(n2, n1_dbl, V21, ldv21, "V21 after low of Y12");
-		// A21 = A21 * A12
-		dgemm("no","no",&n2, &n1_dbl, &n2, &alpha_loc, Y21, &ldy21, V21, &ldv21, &beta_loc, help, &ldhe);
-		print(n2, n1_dbl, help, ldhe, "Y21 recovered");
-		system("pause");
+
 		// Y12 = [A{1,2}; B{1,2}];
 		dlacpy("All", &n1, &n2, &A[0 + lda * n1], &lda, &Y12[0 + ldy12 * 0], &ldy12);
 		dlacpy("All", &n1, &n2, &B[0 + ldb * n1], &ldb, &Y12[n1 + ldy12 * 0], &ldy12);
-		print(n1_dbl, n2, &Y12[0 + ldy21 * 0], ldy12, "Y12");
-
-	
 		
+
+		// LowRank of Y12 (by means of V12)
 		dlacpy("All", &n1_dbl, &n2, Y12, &ldy12, V12, &ldv12);
 		LowRankApprox("SVD", n1_dbl, n1, V12, ldv12, Y12, ldy12, p);  // перезапись V12
-		print(n1_dbl, n2, V12, ldv12, "V12 after low of Y12");
-		dgemm("no", "no", &n1_dbl, &n2, &n2, &alpha_loc, V12, &ldv12, Y12, &ldy12, &beta_loc, help2, &ldhe2);
-		print(n1_dbl, n2, help2, ldhe2, "Y12 recovered");
 
-		// Y_help = Y21_rec * Y12_rec 
-		dgemm("no", "no", &n2, &n1, &n1_dbl, &alpha_loc, help, &ldhe, help2, &ldhe2, &beta_loc, help3, &ldhe3);
-		print(n2, n1, help3, ldhe3, "Y21 * Y12");
 		// Y = V21'*V12;
 		dgemm("No", "No", &mn, &mn, &n1_dbl, &alpha_loc, V21, &ldv21, V12, &ldv12, &beta_loc, Y, &ldy);
-		print(mn, mn, Y, ldy, " Y = V21'*V12 ");
 
 		// C{2,1} = U21*Y;
 		dgemm("No", "No", &n2, &mn, &mn, &alpha_loc, Y21, &ldy21, Y, &ldy, &beta_loc, &C[n1 + ldc * 0], &ldc);
-		print(n2, n1, &C[n1], ldc, " C{2,1} = U21*Y");
 
 		// C{1,2} = U12';
 		dlacpy("All", &n1, &n2, Y12, &ldy12, &C[0 + ldc * n1], &ldc);
-		print(n1, n2, &C[ldc*n1], ldc, " C{1,2} = U12'");
-	
-		dgemm("no", "no", &n2, &n1, &n1, &alpha_loc, &C[n1 + ldc * 0], &ldc, &C[0 + ldc * n1], &ldc, &beta_loc, help3, &ldhe3);
-		print(n2, n1, help3, ldhe3, "C{2,1} * C{1,2}");
+
 
 		Add(n1, alpha, &A[0 + lda * 0], lda, beta, &B[0 + lda * 0], ldb, &C[0 + ldc * 0], ldc, smallsize, eps, method);
 		Add(n2, alpha, &A[n1 + lda * n1], lda, beta, &B[n1 + lda * n1], ldb, &C[n1 + ldc * n1], ldc, smallsize, eps, method);
@@ -1147,24 +1119,32 @@ void Test_add(int n, double alpha, double beta, double smallsize, double eps, ch
 			H1c[i + ldh * j] = 1.0 / (i + j + 1);
 			H2c[i + ldh * j] = 1.0 / (i*i + j*j + 1);
 		}
+#ifdef DEBUG
 	print(n, n, H1, ldh, "H1");
 	print(n, n, H2, ldh, "H2");
+#endif
 
 	SymRecCompress(n, H1c, ldh, smallsize, eps, method);
 	SymRecCompress(n, H2c, ldh, smallsize, eps, method);
 
+#ifdef DEBUG
 	print(n, n, H1c, ldh, "H1c");
 	print(n, n, H2c, ldh, "H2c");
+#endif
 
 	Add_dense(n, n, alpha, H1, ldh, beta, H2, ldh, G, ldg);
 	Add(n, alpha, H1c, ldh, beta, H2c, ldh, Gc, ldg, smallsize, eps, method);
 
+#ifdef DEBUG
 	print(n, n, G, ldg, "res_dense");
 	print(n, n, Gc, ldg, "res_comp");
-	
-	SymResRestore(n, Gc, GcR, ldg, smallsize);
-	print(n, n, GcR, ldg, "res_comp_restore");
+#endif
 
+	SymResRestore(n, Gc, GcR, ldg, smallsize);
+
+#ifdef DEBUG
+	print(n, n, GcR, ldg, "res_comp_restore");
+#endif
 	// |GcR - G| / |G|
 	rel_error(n, n, GcR, G, ldg, eps);
 }
