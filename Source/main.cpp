@@ -59,24 +59,14 @@ int main()
 	free(ipiv_mat);
 
 #elif (PROBLEM == 1)
-	int n = N;
-	double *H = new double[n*n]; // init
-	double *H1 = new double[n*n]; // compressed
-	double *H2 = new double[n*n]; // recovered init
+	int n = 10;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
 
-	H[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
+	for (int n = 3; n <= 10; n++)
+		Test_SymRecCompress(n, eps, method, smallsize);
 
-	int ldh = n;
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < n; i++)
-		{
-			H[i + ldh * j] = 1.0 / (i * i + j * j + 1);
-			H1[i + ldh * j] = 1.0 / (i * i + j * j + 1);
-		}
-	print(n, n, H1, ldh, "H1");
-	Test_SymRecCompress(n, H, H1, H2, ldh);
 #elif (PROBLEM == 2)
 	int n1 = 4; // number of point across the directions
 	int n2 = 4;
@@ -147,33 +137,39 @@ int main()
 	int smallsize = 3;
 
 	// Test compress relative error of Hd and H2
-	Test_DiagMult(n, eps, method, smallsize);
+	for (int n = 3; n <= 10; n++)
+		Test_DiagMult(n, eps, method, smallsize);
 
 #elif (PROBLEM == 4)
-	int n = 5;
-	int k = 6;
+///	int n = 5;
+	//int k = 6;
 	double eps = 1e-4;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
 	// Test compress relative error of Y1(recovered) and Y (init)
-	Test_RecMultL(n, k, eps, method, smallsize);
+	for (int n = 3; n <= 10; n++)
+		for (int k = 1; k <= 10; k++)
+			Test_RecMultL(n, k, eps, method, smallsize);
 #elif (PROBLEM == 5)
 	int m = 8;
 	int n = 10;
 	double eps = 1e-5;
 	char method[255] = "SVD";
-
-	Test_LowRankApprox_InitA(m, n, eps, method);
+	for (int i = 0; i < TEST_IT; i++)
+	{
+		Test_LowRankApprox_InitA(m, n, eps, method);
+	}
 #elif (PROBLEM == 6)
-	int n = 10;
+	int n = 5;
 	double eps = 1e-4;
 	char method[255] = "SVD";
 	int smallsize = 3;
 	double alpha = 1.0;
 	double beta = -1.0;
 
-	Test_add(n, alpha, beta, smallsize, eps, method);
+	for (int n = 3; n <= 10; n++)
+		Test_add(n, alpha, beta, smallsize, eps, method);
 
 #elif (PROBLEM == 7)
 	int m = 3;
@@ -182,7 +178,29 @@ int main()
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	Test_transpose(m, n, smallsize, eps, method);
+	for (int n = 3; n <= 10; n++)
+		for (int m = 2; m <= 10; m++)
+			Test_transpose(m, n, smallsize, eps, method);
+
+#elif (PROBLEM == 8)
+
+	//int n = 3;
+	//int k = 1;
+	double alpha = -1.3;
+	double eps = 1e-4;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	for (int n = 3; n <= 10; n++)
+		for (int k = 1; k <= 10; k++)
+			Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
+#elif (PROBLEM == 9) // test for inversion of compressed matrix
+	int n = 10;
+	double eps = 1e-06;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	Test_SymCompRecInv(n, smallsize, eps, method);
 
 #endif
 	system("pause");

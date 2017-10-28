@@ -250,8 +250,7 @@ void test(int nbl, int n2, int n3, double *A_f, int ldaf, double *U_f, int lduf,
 	dgemm(&no, &no, &n2, &n2, &n2, &one, L_f, &ldlf, U_f, &lduf, &zero, A_res, &ldaf);
 
 #ifdef DEBUG
-	printf("matrix A result: A = L * U\n");
-	print(n2, n2, A_f, ldaf);
+	print(n2, n2, A_f, ldaf,"matrix A result: A = L * U" );
 #endif
 
 	// Norm of residual || A - L * U ||
@@ -287,8 +286,7 @@ void construct_A(int nbl, int n2, int n3, double *A, int ldA, double *A_f, int l
 	dlacpy(&all, &nbl, &nbl2, &A[(nbl - 1) * nbl + ldA * nbl], &ldA, &A_f[(nbl - 1) * nbl + ldaf * (nbl - 2) * nbl], &ldaf);
 
 #ifdef DEBUG
-	printf("A_init\n");
-	print(n2, n2, A_f, ldaf);
+	print(n2, n2, A_f, ldaf, "A_init");
 #endif
 }
 
@@ -320,8 +318,7 @@ void construct_L(int nbl, int n2, int n3, double *A, int ldA, double *L_f, int l
 		L_f[i + ldlf * i] = 1.0;
 
 #ifdef DEBUG
-	printf("L_full\n");
-	print(n2, n2, L_f, ldlf);
+	print(n2, n2, L_f, ldlf,"L_full");
 #endif
 }
 
@@ -348,8 +345,7 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 	dlacpy(&up, &nbl, &nbl, &A[(nbl - 1) * nbl + ldA * 2 * nbl], &ldA, &U_f[(nbl - 1) * nbl + lduf * (nbl - 1) * nbl], &lduf);
 
 #ifdef DEBUG
-	printf("U_full\n");
-	print(n2, n2, U_f, lduf);
+	print(n2, n2, U_f, lduf, "U_full");
 #endif
 }
 
@@ -394,6 +390,7 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 	int mn = min(n1, n2);
 	int info = 0;
 	int lwork = -1;
+	p = 0;
 
 	double wkopt;
 	double *work;
@@ -411,7 +408,7 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 		dgesvd(&over, &sing, &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, work, &lwork, &info); // first V - not referenced
 		// error 2 (как mkl складывает вектора columnwise)
 
-		for (int j = 0; j < min(n1, n2); j++)
+		for (int j = 0; j < mn; j++)
 		{
 			double s1 = S[j] / S[0];
 			if (s1 < EPS)
@@ -424,9 +421,10 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 		}
 
 #ifdef DEBUG
-		printf("for n1 = %d, n2 = %d, p = %d\n", n1, n2, p);
+		printf("LowRank after SVD: n2 = %d, n1 = %d, p = %d\n", n2, n1, p);
 #endif
-		for (int j = p; j < n1; j++)   // original part: [n2 x n1], but overwritten part [n2 x min(n2,n1)]
+							// n1
+		for (int j = p; j < mn; j++)   // original part: [n2 x n1], but overwritten part [n2 x min(n2,n1)]
 			for (int i = 0; i < n2; i++)
 				A[i + lda * j] = 0;
 
@@ -446,6 +444,7 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 
 void Test_LowRankApprox_InitA(int m, int n, double eps, char *method)
 {
+	printf("Test for transposition of LowRank ");
 	// A - matrix in dense order
 	double *A = alloc_arr(m * n);
 	double *A_init = alloc_arr(m * n);
@@ -523,19 +522,37 @@ void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered *
 	}
 }
 
-void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh)
+void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 {
+	printf("*****Test for SymRecCompress  n = %d ******* ", n);
 	int small_size = 3;
 	char frob = 'F';
 	double norm = 0;
+
+	double *H = new double[n*n]; // init
+	double *H1 = new double[n*n]; // compressed
+	double *H2 = new double[n*n]; // recovered init
+
+	H[0:n*n] = 0;
+	H1[0:n*n] = 0;
+	H2[0:n*n] = 0;
+
+	int ldh = n;
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+		{
+			H[i + ldh * j] = 1.0 / (i * i + j * j + 1);
+			H1[i + ldh * j] = 1.0 / (i * i + j * j + 1);
+		}
+#ifdef DEBUG
+	print(n, n, H1, ldh, "H1");
+#endif
 	SymRecCompress(n, H1, ldh, small_size, EPS, "SVD");
 	SymResRestore(n, H1, H2, ldh, small_size);
 
 #ifdef DEBUG
-	printf("H1 compressed");
-	print(n, n, H1, ldh);
-	printf("H recovered\n");
-	print(n, n, H2, ldh);
+	print(n, n, H1, ldh, "H1 compressed");
+	print(n, n, H2, ldh, "H recovered");
 #endif
 
 	// Norm of residual || A - L * U ||
@@ -549,10 +566,8 @@ void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh
 	}
 
 #ifdef DEBUG
-	printf("H init\n");
-	print(n, n, H, ldh);
-	printf("diff\n");
-	print(n, n, H2, ldh);
+	print(n, n, H, ldh,"H init");
+	print(n, n, H2, ldh, "diff");
 #endif
 
 	norm = dlange(&frob, &n, &n, H2, &ldh, NULL);
@@ -560,6 +575,9 @@ void Test_SymRecCompress(int n, double *H, double *H1, double *H2, const int ldh
 	if (norm < EPS) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, EPS);
 	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, EPS);
 
+	free_arr(&H);
+	free_arr(&H2);
+	free_arr(&H1);
 }
 
 
@@ -853,6 +871,7 @@ void Resid(double *D, int ldd, double *B, int ldb, double *x, double *f, double 
 
 void Test_DiagMult(int n, double eps, char *method, int smallsize)
 {
+	printf("*****Test for DiagMult  n = %d ******* ", n);
 	double *Hd = new double[n*n]; // diagonal Hd = D * H * D
 	double *H1 = new double[n*n]; // compressed H
 	double *H2 = new double[n*n]; // recovered H after D * H1 * D
@@ -862,8 +881,6 @@ void Test_DiagMult(int n, double eps, char *method, int smallsize)
 	Hd[0:n*n] = 0;
 	H1[0:n*n] = 0;
 	H2[0:n*n] = 0;
-
-	printf("**********Test: Diag Mult************\n");
 
 	int ldh = n;
 	for (int j = 0; j < n; j++)
@@ -977,6 +994,7 @@ void RecMultL(int n, int m, double *A, int lda, double *X, int ldx, double *Y, i
 Сравниваются результаты со сжатием и без */
 void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 {
+	printf("*****Test for RecMultL  n = %d k = %d ******* ", n, k);
 	double *H = new double[n*n]; // init and compressed
 	double *X = new double[n*k];
 	double *Y = new double[n*k]; // init Y
@@ -993,9 +1011,6 @@ void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 	X[0:n*k] = 0;
 	Y[0:n*k] = 0;
 	Y1[0:n*k] = 0;
-
-	printf("**********Test: Diag Mult************\n");
-
 
 	for (int i = 0; i < n; i++)
 	{
@@ -1035,10 +1050,15 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 {
 	double alpha_loc = 1.0;
 	double beta_loc = 0.0;
-
+#ifdef DEBUG
+	printf("******Function: Add*******\n");
+#endif
 	// n - order of A, B and C
 	if (n <= smallsize)
 	{
+#ifdef DEBUG
+		printf("Smallsize - doing dense addition for n = %d and smallsize = %d\n", n, smallsize);
+#endif
 		Add_dense(n, n, alpha, A, lda, beta, B, ldb, C, ldc);
 	}
 	else
@@ -1064,43 +1084,46 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 		double *Y = alloc_arr(mn * mn); int ldy = mn;
 
 		Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
-		Add_dense(n2, n1, beta, &B[n1 + lda * 0], ldb, 0.0, B, ldb, &B[n1 + lda * 0], ldb);
+		Add_dense(n2, n1, beta, &B[n1 + ldb * 0], ldb, 0.0, B, ldb, &B[n1 + ldb * 0], ldb);
 
 		// Y21 = [alpha*A{2,1} beta*B{2,1}];
 		dlacpy("All", &n2, &n1, &A[n1 + lda * 0], &lda, &Y21[0 + ldy21 * 0], &ldy21);
 		dlacpy("All", &n2, &n1, &B[n1 + ldb * 0], &ldb, &Y21[0 + ldy21 * n1], &ldy21);
 
-		LowRankApprox("SVD", n2, n1_dbl, Y21, ldy21, V21, ldv21, p); // перезапись Y21
-
 		// Y12 = [A{1,2}; B{1,2}];
 		dlacpy("All", &n1, &n2, &A[0 + lda * n1], &lda, &Y12[0 + ldy12 * 0], &ldy12);
 		dlacpy("All", &n1, &n2, &B[0 + ldb * n1], &ldb, &Y12[n1 + ldy12 * 0], &ldy12);
-		
 
-		// LowRank of Y12 (by means of V12)
-		dlacpy("All", &n1_dbl, &n2, Y12, &ldy12, V12, &ldv12);
-		LowRankApprox("SVD", n1_dbl, n1, V12, ldv12, Y12, ldy12, p);  // перезапись V12
+		// произведение Y21 и Y12 - это матрица n2 x n1
+		LowRankApprox("SVD", n2, n1_dbl, Y21, ldy21, V21, ldv21, p); // перезапись Y21
+		LowRankApprox("SVD", n1_dbl, n1, Y12, ldy12, V12, ldv12, p);  // перезапись Y12
+
 
 		// Y = V21'*V12;
-		dgemm("No", "No", &mn, &mn, &n1_dbl, &alpha_loc, V21, &ldv21, V12, &ldv12, &beta_loc, Y, &ldy);
+		dgemm("No", "No", &mn, &mn, &n1_dbl, &alpha_loc, V21, &ldv21, Y12, &ldy12, &beta_loc, Y, &ldy);
 
-		// C{2,1} = U21*Y;
-		dgemm("No", "No", &n2, &mn, &mn, &alpha_loc, Y21, &ldy21, Y, &ldy, &beta_loc, &C[n1 + ldc * 0], &ldc);
+		// C{2,1} = U21*Y;   
+		dgemm("No", "No", &n2, &n1, &mn, &alpha_loc, Y21, &ldy21, Y, &ldy, &beta_loc, &C[n1 + ldc * 0], &ldc);
 
 		// C{1,2} = U12';
-		dlacpy("All", &n1, &n2, Y12, &ldy12, &C[0 + ldc * n1], &ldc);
+		dlacpy("All", &n1, &n2, V12, &ldv12, &C[0 + ldc * n1], &ldc);
 
 
-		Add(n1, alpha, &A[0 + lda * 0], lda, beta, &B[0 + lda * 0], ldb, &C[0 + ldc * 0], ldc, smallsize, eps, method);
-		Add(n2, alpha, &A[n1 + lda * n1], lda, beta, &B[n1 + lda * n1], ldb, &C[n1 + ldc * n1], ldc, smallsize, eps, method);
+		Add(n1, alpha, &A[0 + lda * 0], lda, beta, &B[0 + ldb * 0], ldb, &C[0 + ldc * 0], ldc, smallsize, eps, method);
+		Add(n2, alpha, &A[n1 + lda * n1], lda, beta, &B[n1 + ldb * n1], ldb, &C[n1 + ldc * n1], ldc, smallsize, eps, method);
 
-
+		free_arr(&Y21);
+		free_arr(&Y12);
+		free_arr(&V21);
+		free_arr(&V12);
+		free_arr(&Y);
 	}
 
 }
 
 void Test_add(int n, double alpha, double beta, double smallsize, double eps, char *method)
 {
+	printf("*****Test for Add n = %d ******* ", n);
 	double *H1 = alloc_arr(n*n);
 	double *H2 = alloc_arr(n*n);
 	double *G = alloc_arr(n*n);
@@ -1147,6 +1170,14 @@ void Test_add(int n, double alpha, double beta, double smallsize, double eps, ch
 #endif
 	// |GcR - G| / |G|
 	rel_error(n, n, GcR, G, ldg, eps);
+
+	free_arr(&H1);
+	free_arr(&H2);
+	free_arr(&G);
+	free_arr(&H1c);
+	free_arr(&H2c);
+	free_arr(&Gc);
+	free_arr(&GcR);
 }
 
 void Test_transpose(int m, int n, int smallsize, double eps, char *method)
@@ -1177,11 +1208,174 @@ void Test_transpose(int m, int n, int smallsize, double eps, char *method)
 	LowRankApprox("SVD", n, m, Htr, ldhtr, Vtr, ldvtr, p);
 
 	dgemm("Trans", "Trans", &m, &n, &mn, &alpha, Vtr, &ldvtr, Htr, &ldhtr, &beta, H_rec, &ldh);
-	//print(n, m, Htr, ldhtr, "Htr_low");
 	
+	// || H _rec  - H || / || H ||
 	rel_error(m, n, H_rec, H, ldh, eps);
-//	rel_error(n, m, Vcomp_tr, Vtr, ldvtr, eps);
 
+}
+
+/* Функция вычисления симметричного малорангового дополнения A:= A + alpha * V * Y * V'
+A - симметрическая сжатая (n x n)
+Y - плотная симметричная размера k x k, k << n , V - плотная прямоугольная n x k
+(n x n) = (n x n) + (n x k) * (k x k) * (k * n) */
+
+void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, int ldy, double *V, int ldv, double *B, int ldb, int smallsize, double eps, char* method)
+{
+	double alpha_one = 1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+
+	int p = 0;
+	if (n <= smallsize)
+	{
+		// X = X + alpha * V * Y * VT
+
+		// C = V * Y
+		double *C = alloc_arr(n * k); int ldc = n;
+		dsymm("Right", "Up", &n, &k, &alpha_one, Y, &ldy, V, &ldv, &beta_zero, C, &ldc);
+
+		// X = X + alpha * C * Vt
+		dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, A, &lda);
+
+		// B = A
+		dlacpy("All", &n, &n, A, &lda, B, &ldb);
+
+		free_arr(&C);
+	}
+	else
+	{
+		int n2 = (int)ceil(n / 2.0); // n2 > n1
+		int n1 = n - n2;
+
+		int nk = n1 + k;
+		// for this division n2 > n1 we can store a low memory
+		double *Y12 = alloc_arr(nk * n1); int ldy12 = nk;
+		double *Y21 = alloc_arr(n2 * nk); int ldy21 = n2;
+
+		double *V_uptr = alloc_arr(k * n1); int ldvuptr = k;
+		double *VY = alloc_arr(n2 * k); int ldvy = n2;
+
+		int mn = min(n2, nk);
+		double *V21 = alloc_arr(mn * nk); int ldv21 = mn;
+		double *V12 = alloc_arr(n1 * n1); int ldv12 = n1;
+
+		double *VV = alloc_arr(mn * n1); int ldvv = mn;
+
+		dgemm("No", "No", &n2, &k, &k, &alpha, &V[n1 + ldv * 0], &ldv, Y, &ldy, &beta_zero, VY, &ldvy);
+
+		// Y21 = [A{2,1} alpha*V(m:n,:)*Y];
+		dlacpy("All", &n2, &n1, &A[n1 + lda * 0], &lda, &Y21[0 + ldy21 * 0], &ldy21);
+		dlacpy("All", &n2, &k, VY, &ldvy, &Y21[0 + ldy21 * n1], &ldy21);
+
+		Mat_Trans(n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
+	
+		// Y12 = [A{1,2} V(1:n1,:)];
+		dlacpy("All", &n1, &n1, &A[0 + lda * n1], &lda, &Y12[0 + ldy12 * 0], &ldy12);
+		dlacpy("All", &k, &n1, V_uptr, &ldvuptr, &Y12[n1 + ldy21 * 0], &ldy12);
+
+		// [U21,V21] = LowRankApprox (Y21, eps, method);
+		LowRankApprox("SVD", n2, nk, Y21, ldy21, V21, ldv21, p);
+
+		// [U12, V12] = LowRankApprox(Y12, eps, method);
+		LowRankApprox("SVD", nk, n1, Y12, ldy12, V12, ldv12, p);
+
+
+		// B{2,1} = U21*(V21'*V12);
+
+		// V21 * Y12
+		dgemm("No", "No", &mn, &n1, &nk, &alpha_one, V21, &ldv21, Y12, &ldy12, &beta_zero, VV, &ldvv);
+		dgemm("No", "No", &n2, &n1, &mn, &alpha_one, Y21, &ldy21, VV, &ldvv, &beta_zero, &B[n1 + ldb * 0], &ldb);
+		
+		// B{1,2} = U12;
+		dlacpy("All", &n1, &n1, V12, &ldv12, &B[0 + ldb * n1], &ldb);
+
+		// B{1,1} = SymCompUpdate2 (A{1,1}, Y, V(1:n1,:), alpha, eps, method);
+		SymCompUpdate2(n1, k, &A[0 + lda * 0], lda, alpha, Y, ldy, &V[0 + ldv * 0], ldv, &B[0 + ldb * 0], ldb, smallsize, eps, method);
+		
+		// B{2,2} = SymCompUpdate2 (A{2,2}, Y, V(m:n ,:), alpha, eps, method);
+		SymCompUpdate2(n2, k, &A[n1 + lda * n1], lda, alpha, Y, ldy, &V[n1 + ldv * 0], ldv, &B[n1 + ldb * n1], ldb, smallsize, eps, method);
+
+		free_arr(&Y21);
+		free_arr(&Y12);
+		free_arr(&V21);
+		free_arr(&V12);
+		free_arr(&VY);
+		free_arr(&V_uptr);
+		free_arr(&VV);
+	}
+}
+
+// || B - B_rec || / || B ||
+void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, char* method)
+{
+	printf("*****Test for SymCompUpdate2   n = %d k = %d ***** ", n, k);
+	double alpha_one = 1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+
+	// B = H - V * Y * VT
+	double *B = alloc_arr(n * n); int ldb = n;
+	double *B_rec = alloc_arr(n * n);
+	double *Y = alloc_arr(k * k); int ldy = k;
+	double *V = alloc_arr(n * k); int ldv = n; int ldvtr = k;
+	double *HC = alloc_arr(n * n); int ldh = n;
+	double *H = alloc_arr(n * n); 
+	double *C = alloc_arr(n * k); int ldc = n;
+
+	Hilbert(n, HC, ldh);
+	Hilbert(n, H, ldh);
+
+	for (int i = 0; i < k; i++)
+		Y[i + ldy * i] = i + 1;
+
+	for (int j = 0; j < k; j++)
+		for (int i = 0; i < n; i++)
+			V[i + ldv * j] = (i + j + 1);
+
+	// C = V * Y
+	dsymm("Right", "Up", &n, &k, &alpha_one, Y, &ldy, V, &ldv, &beta_zero, C, &ldc);
+
+	// H = H + alpha * C * VT
+	dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, H, &ldh);
+
+	// Compressed update
+	SymRecCompress(n, HC, ldh, smallsize, eps, method);
+
+	SymCompUpdate2(n, k, HC, ldh, alpha, Y, ldy, V, ldv, B, ldb, smallsize, eps, method);
+	SymResRestore(n, B, B_rec, ldh, smallsize);
+
+#ifdef DEBUG
+	print(n, n, B_rec, ldb, "B_rec");
+	print(n, n, H, ldh, "H");
+#endif
+	// || B_rec - H || / || H ||
+	rel_error(n, n, B_rec, H, ldh, eps);
+	
+	free_arr(&B);
+	free_arr(&B_rec);
+	free_arr(&H);
+	free_arr(&HC);
+	free_arr(&Y);
+	free_arr(&C);
+	free_arr(&V);
+}
+
+// Рекурсивное обращение сжатой матрицы
+void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize, double eps, char *method)
+{
+
+}
+
+void Test_SymCompRecInv(int n, int smallsize, double eps, char *method)
+{
+
+}
+
+void Hilbert(int n, double *H, int ldh)
+{
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+			H[i + ldh * j] = 1.0 / (i + j + 1);
 }
 
 void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr)
