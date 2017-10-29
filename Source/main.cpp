@@ -194,13 +194,16 @@ int main()
 	for (int n = 3; n <= 10; n++)
 		for (int k = 1; k <= 10; k++)
 			Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
+
 #elif (PROBLEM == 9) // test for inversion of compressed matrix
-	int n = 10;
+
+	int n = 5;
 	double eps = 1e-06;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	Test_SymCompRecInv(n, smallsize, eps, method);
+	for (int n = 3; n <= 10; n++)
+		Test_SymCompRecInv(n, smallsize, eps, method);
 
 #endif
 	system("pause");

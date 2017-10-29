@@ -66,4 +66,5 @@ void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps);
 int compare_str(int n, char *s1, char *s2);
 void Resid(double *D, int ldd, double *B, int ldb, double *x, double *f, double *g, double &RelRes);
 void print_map(const map<vector<int>, double>& SD);
+void Eye(int n, double *H, int ldh);
 map<vector<int>, double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);

@@ -1218,7 +1218,6 @@ void Test_transpose(int m, int n, int smallsize, double eps, char *method)
 A - симметрическая сжатая (n x n)
 Y - плотная симметричная размера k x k, k << n , V - плотная прямоугольная n x k
 (n x n) = (n x n) + (n x k) * (k x k) * (k * n) */
-
 void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, int ldy, double *V, int ldv, double *B, int ldb, int smallsize, double eps, char* method)
 {
 	double alpha_one = 1.0;
@@ -1363,12 +1362,131 @@ void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, 
 // Рекурсивное обращение сжатой матрицы
 void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize, double eps, char *method)
 {
+	double alpha_one = 1.0;
+	double alpha_mone = -1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+	int info = 0;
+	double wquery = 0;
+	int lwork = -1;
 
+	if (n <= smallsize)
+	{
+		int *ipiv = (int*)malloc(n * sizeof(int));
+
+		// LU factorization of A
+		dgetrf(&n, &n, A, &lda, ipiv, &info);
+
+		// space query
+		dgetri(&n, A, &lda, ipiv, &wquery, &lwork, &info);
+
+		lwork = (int)wquery;
+		double *work = alloc_arr(lwork);
+
+		// inversion of A
+		dgetri(&n, A, &lda, ipiv, work, &lwork, &info);
+
+		// dlacpy 
+		dlacpy("All", &n, &n, A, &lda, B, &ldb);
+
+		free(ipiv);
+	}
+	else
+	{
+		int n2 = (int)ceil(n / 2.0); // n2 > n1
+		int n1 = n - n2;
+
+		double *X11 = alloc_arr(n1 * n1); int ldx11 = n1;
+		double *X22 = alloc_arr(n2 * n2); int ldx22 = n2;
+		double *Y = alloc_arr(n1 * n1); int ldy = n1;
+		double *V = alloc_arr(n1 * n1); int ldv = n1;
+		double *B12 = alloc_arr(n1 * n1); int ldb12 = n1;
+
+		// Inversion of A22 to X22
+		SymCompRecInv(n2, &A[n1 + lda * n1], lda, X22, ldx22, smallsize, eps, method);
+
+		// Save X22 * U to B{2,1}
+		RecMultL(n2, n1, X22, ldx22, &A[n1 + lda * 0], lda, &B[n1 + ldb * 0], ldb, smallsize);
+
+		// Compute Y = UT * X22 * U = | A[2,1]T * B{2,1} | = | (n1 x n2) x (n2 x n1) |
+		dgemm("Trans", "No", &n1, &n1, &n2, &alpha_one, &A[n1 + lda * 0], &lda, &B[n1 + ldb * 0], &ldb, &beta_zero, Y, &ldy);
+
+		// Update X11 = A11 - V * UT * X22 * U * VT = | A11 - V * Y * VT | = | (n1 x n1) - (n1 x n1) * (n1 x n1) * (n1 x n1) |
+		Mat_Trans(n1, n1, &A[0 + lda * n1], lda, V, ldv);
+		SymCompUpdate2(n1, n1, &A[0 + lda * 0], lda, alpha_mone, Y, ldy, V, ldv, X11, ldx11, smallsize, eps, method);
+
+		// Inversion of X11 to B11
+		SymCompRecInv(n1, X11, ldx11, &B[0 + ldb * 0], ldb, smallsize, eps, method);
+
+		// Fill B{1,2} as B12 = -B{1,1} * A{1,2} = -X11 * V = (n1 x n1) * (n1 x n1) in real (x2 x x1)
+		RecMultL(n1, n1, &B[0 + ldb * 0], ldb, V, ldv, B12, ldb12, smallsize);
+		Add_dense(n1, n1, alpha_mone, B12, ldb12, beta_zero, B, ldb, B12, ldb12);
+
+		// B{1,2} = transpose(B12)
+		Mat_Trans(n1, n1, B12, ldb12, &B[0 + ldb * n1], ldb);
+
+		// Y = -(A{1,2})' * B{1,2} = -VT * (-X11 * V) = - VT * B12; [n1 x n1] * [n1 x n1]
+		dgemm("No", "No", &n1, &n1, &n1, &alpha_mone, &A[0 + lda * n1], &lda, B12, &ldb12, &beta_zero, Y, &ldy);
+
+		// Update X22 + (X22*U) * VT * X11 * V (UT * X22) = X22 + B21 * Y * B21T = (n2 x n2) + (n2 x n1) * (n1 x n1) * (n1 x n2)
+		SymCompUpdate2(n2, n1, X22, ldx22, alpha_one, Y, ldy, &B[n1 + ldb * 0], ldb, &B[n1 + ldb * n1], ldb, smallsize, eps, method);
+
+		free_arr(&X11);
+		free_arr(&X22);
+		free_arr(&Y);
+		free_arr(&V);
+		free_arr(&B12);
+	}
 }
 
 void Test_SymCompRecInv(int n, int smallsize, double eps, char *method)
 {
+	printf("***** Test_SymCompRecInv n = %d **** \n", n);
+	double *H = alloc_arr(n * n);
+	double *Hc = alloc_arr(n * n);
+	double *Bc = alloc_arr(n * n);
+	double *Brec = alloc_arr(n * n);
+	double *Y = alloc_arr(n * n);
 
+	int ldh = n;
+	int ldb = n;
+	int ldy = n;
+
+	double alpha_mone = -1.0;
+	double beta_one = 1.0;
+
+	Hilbert(n, H, ldh);
+	Hilbert(n, Hc, ldh);
+
+	// for stability
+	for (int i = 0; i < n; i++)
+	{
+		H[i + ldh * i] += 1.0;
+		Hc[i + ldh * i] += 1.0;
+	}
+
+	SymRecCompress(n, Hc, ldh, smallsize, eps, method);
+	SymCompRecInv(n, Hc, ldh, Bc, ldb, smallsize, eps, method);
+	SymResRestore(n, Bc, Brec, ldb, smallsize);
+
+	Eye(n, Y, ldy);
+	
+	// Y = Y - H * Brec
+	dgemm("No", "No", &n, &n, &n, &alpha_mone, H, &ldh, Brec, &ldb, &beta_one, Y, &ldy);
+	
+	double norm = dlange("Frob", &n, &n, Y, &ldy, NULL);
+
+	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
+
+}
+
+void Eye(int n, double *H, int ldh)
+{
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+			if (j == i) H[i + ldh * j] = 1.0;
+			else H[i + ldh * j] = 0.0;
 }
 
 void Hilbert(int n, double *H, int ldh)
