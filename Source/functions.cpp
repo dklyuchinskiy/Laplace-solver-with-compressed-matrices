@@ -8,7 +8,7 @@ void print(int m, int n, double *u, int ldu, char *mess)
 	{
 		for (int j = 0; j < n; j++)
 		{
-			printf("%6.3lf ", u[i + ldu*j]);
+			printf("%5.2lf ", u[i + ldu*j]);
 			//if (j % N == N - 1) printf("|");
 		}
 		printf("\n");
@@ -352,7 +352,7 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 // ---------- Compressed matrices --------------
 
 void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,  
-	const int small_size, int eps, 
+	const int small_size, double eps, 
 	char *method /* SVD or other */)
 {
 	int ldu, ldv;
@@ -373,16 +373,16 @@ void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const i
 #endif
 
 		// LowRank A21
-		LowRankApprox(method, n2, n1, &A[n1 + lda * 0], lda, &A[0 + lda * n1], lda, p);
+		LowRankApprox(n2, n1, &A[n1 + lda * 0], lda, &A[0 + lda * n1], lda, p, eps, method);
 
-		SymRecCompress(n1, &A[0 + lda * 0], lda, small_size, EPS, method);
-		SymRecCompress(n2, &A[n1 + lda * n1], lda, small_size, EPS, method);
+		SymRecCompress(n1, &A[0 + lda * 0], lda, small_size, eps, method);
+		SymRecCompress(n2, &A[n1 + lda * n1], lda, small_size, eps, method);
 	}
 }
 
 // Low Rank approximation
-void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
-					double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv, int &p)
+void LowRankApprox(int n2, int n1 /* size of A21 = A */,
+					double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv, int &p, double eps, char *method)
 {
 	char over = 'O';
 	char all = 'A';
@@ -402,7 +402,6 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 		dgesvd(&over, &sing, &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, &wkopt, &lwork, &info); // first V - not referenced
 		lwork = (int)wkopt;
 		work = (double*)malloc(lwork * sizeof(double));
-		// error 1
 
 		// A = U1 * S * V1
 		dgesvd(&over, &sing, &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, work, &lwork, &info); // first V - not referenced
@@ -411,7 +410,7 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 		for (int j = 0; j < mn; j++)
 		{
 			double s1 = S[j] / S[0];
-			if (s1 < EPS)
+			if (s1 < eps)
 			{
 				break;
 			}
@@ -442,9 +441,9 @@ void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
 	free(S);
 }
 
-void Test_LowRankApprox_InitA(int m, int n, double eps, char *method)
+void Test_LowRankApprox(int m, int n, double eps, char *method)
 {
-	printf("Test for transposition of LowRank ");
+	printf("Test for LowRankApproximation m = %d n = %d eps = %lf ", m, n, eps);
 	// A - matrix in dense order
 	double *A = alloc_arr(m * n);
 	double *A_init = alloc_arr(m * n);
@@ -466,7 +465,8 @@ void Test_LowRankApprox_InitA(int m, int n, double eps, char *method)
 	double alpha = 1.0;
 	double beta = 0.0;
 
-	LowRankApprox("SVD", m, n, A, lda, V, ldv, p);
+	p = 0;
+	LowRankApprox(m, n, A, lda, V, ldv, p, eps, "SVD");
 
 	dgemm("no", "no", &m, &n, &mn, &alpha, A, &lda, V, &ldv, &beta, A_rec, &lda);
 
@@ -474,13 +474,6 @@ void Test_LowRankApprox_InitA(int m, int n, double eps, char *method)
 
 }
 
-
-/*
-Test_LowRankApprox(int m, int n, double *A, bool fill_mat, double eps, char *method)
-{
-	// A - matrix in dense order
-
-}*/
 int compare_str(int n, char *s1, char *s2)
 {
 	for (int i = 0; i < n; i++)
@@ -524,7 +517,7 @@ void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered *
 
 void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 {
-	printf("*****Test for SymRecCompress  n = %d ******* ", n);
+	printf("*****Test for SymRecCompress  n = %d eps = %e ******* ", n, eps);
 	int small_size = 3;
 	char frob = 'F';
 	double norm = 0;
@@ -541,13 +534,13 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 	for (int j = 0; j < n; j++)
 		for (int i = 0; i < n; i++)
 		{
-			H[i + ldh * j] = 1.0 / (i * i + j * j + 1);
-			H1[i + ldh * j] = 1.0 / (i * i + j * j + 1);
+			H[i + ldh * j] = 1.0 / (i + j + 1);
+			H1[i + ldh * j] = 1.0 / (i + j + 1);
 		}
 #ifdef DEBUG
 	print(n, n, H1, ldh, "H1");
 #endif
-	SymRecCompress(n, H1, ldh, small_size, EPS, "SVD");
+	SymRecCompress(n, H1, ldh, small_size, eps, "SVD");
 	SymResRestore(n, H1, H2, ldh, small_size);
 
 #ifdef DEBUG
@@ -572,8 +565,8 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 
 	norm = dlange(&frob, &n, &n, H2, &ldh, NULL);
 	norm = norm / dlange(&frob, &n, &n, H, &ldh, NULL);
-	if (norm < EPS) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, EPS);
-	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, EPS);
+	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
 
 	free_arr(&H);
 	free_arr(&H2);
@@ -583,7 +576,12 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 
 // Test for the whole solver
 
-void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double *D, int ldd, double *B, int ldb, double *x1, double *f)
+inline int ind(int j, int n)
+{
+	return n * j;
+}
+
+void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double *D, int ldd, double *B, double *x1, double *f)
 {
 	// 1. Аппроксимация двумерной плоскости
 
@@ -592,6 +590,15 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 	int NBF = nbr * nbr; // full number of blocks in matrix
 	double *DD = alloc_arr(n * n); // память под двумерный диагональный блок
 	int lddd = n;
+	int size = n * nbr;
+
+	double *f_help = alloc_arr(n);
+
+	double done = 1.0;
+	double dzero = 0.0;
+	int ione = 1;
+
+	double time1, time2;
 
 	// переделать все это размеры
 
@@ -628,24 +635,30 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 	printf("sparse_size = %d\n", sparse_size);
 	map<vector<int>, double> SD;
 	SD = dense_to_sparse(n, n, DD, lddd, i_ind, j_ind, d);
-	print_map(SD);
-	free(DD);
+	//print_map(SD);
+
 
 	// Using only sparse matrix D - for 3D. Transfer each 2D block SD to 3D matrix D
 
-	srand((unsigned int)time(0));
-	for (int j = 0; j < nbr; j++)
-		for (int i = 0; i < n; i++)
-	{
-			x1[i + n * j] = random(0.0, 1.0);
-			if (j < nbr - 1) B[i + n * j] = -1.0;
-	}
+	GenSolVector(size, x1);
 
+#pragma omp parallel for
+	for (int j = 0; j < nbr; j++)
+	{
+		dlacpy("All", &n, &n, DD, &lddd, &D[ind(j, n) + ldd * 0], &ldd);
+		for (int i = 0; i < n; i++)
+		{
+			if (j < nbr - 1) B[ind(j, n) + i] = -1.0;
+		}
+	}
+/*
+	time1 = omp_get_wtime();
 	// f[i + n * 0]
 	// попробуем использовать один и тот же 2D вектор SD для всех блоков NB
+#pragma omp parallel for schedule(guided)
 	for (int i = 0; i < n; i++)
 	{
-		f[i + n * 0] += B[i + n * 0] * x1[i + n * 1]; // f[1]
+		f[i + n * 0] = B[i + n * 0] * x1[i + n * 1]; // f[1]
 		f[i + n * (nbr - 1)] = B[i + n * (nbr - 2)] * x1[i + n * (nbr - 2)]; // f[NB]
 		for (int j = 0; j < n; j++)
 		{
@@ -658,10 +671,11 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 		}
 	}
 
+#pragma omp parallel for schedule(guided)
 	for (int blk = 1; blk < nbr - 1; blk++)
 		for (int i = 0; i < n; i++)
 		{
-			f[i + n * blk] += B[i + n * (blk - 1)] * x1[i + n * (blk - 1)] + B[i + n * blk] * x1[i + n * (blk + 1)]; ;
+			f[i + n * blk] = B[i + n * (blk - 1)] * x1[i + n * (blk - 1)] + B[i + n * blk] * x1[i + n * (blk + 1)];
 			for (int j = 0; j < n; j++)
 			{
 				vector<int> vect = { i,  j };
@@ -671,18 +685,76 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 				}
 			}
 	}
+	time1 = omp_get_wtime() - time1;
+	*/
 
+	// через mkl
+
+	time2 = omp_get_wtime();
+	// f[1] = D[1] * x[1] + diag{B[1]} * x[2]
+	DenseDiagMult(n, &B[ind(0, n)], &x1[ind(1, n)], &f[ind(0, n)]);
+	dsymv("Up", &n, &done, &D[ind(0, n)], &ldd, &x1[ind(0, n)], &ione, &done, &f[ind(0, n)], &ione);
+
+	// f[N] = diag(B{N-1}) * x{N-1} + D{N} * x{N};
+	DenseDiagMult(n, &B[ind(nbr - 2, n)], &x1[ind(nbr - 2, n)], &f[ind(nbr - 1, n)]);
+	dsymv("Up", &n, &done, &D[ind(nbr - 1, n)], &ldd, &x1[ind(nbr - 1, n)], &ione, &done, &f[ind(nbr - 1, n)], &ione);
+
+
+	// f{ i } = diag(B{ i - 1 }) * x{ i - 1 } + D{ i } * x{ i } + diag(B{ i }) * x{ i + 1 };
+	for (int blk = 1; blk < nbr - 1; blk++)
+	{
+		//f{ i } = diag(B{ i - 1 }) * x { i - 1 } + diag(B{ i }) *x { i + 1 };
+		DenseDiagMult(n, &B[ind(blk - 1, n)], &x1[ind(blk - 1, n)], &f[ind(blk, n)]);
+		DenseDiagMult(n, &B[ind(blk, n)], &x1[ind(blk + 1, n)], f_help);
+		daxpby(&n, &done, f_help, &ione, &done, &f[ind(blk, n)], &ione);
+		//Add_dense_vect(n, done, &f[ind(blk, n)], done, f_help, &f[ind(blk, n)]);
+
+		// f{i} = f{i} + D{ i } * x{ i } 
+		dsymv("Up", &n, &done, &D[ind(blk, n)], &ldd, &x1[ind(blk, n)], &ione, &done, &f[ind(blk, n)], &ione);
+	}
+
+	time2 = omp_get_wtime() - time2;
+
+	printf("time1 = %lf\ntime_mkl = %lf\n", time1, time2);
+
+	free_arr(&DD);
+	free_arr(&d);
+	free(i_ind);
+	free(j_ind);
 }
-#if 0
-void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, int ldb, double *f, double thresh, int smallsize, int ItRef, char *bench,
-			/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount)
+
+inline void Add_dense_vect(int n, double alpha, double *a, double beta, double *b, double *c)
+{
+#pragma omp parallel for simd schedule(dynamic,64)
+	for (int i = 0; i < n; i++)
+		c[i] = alpha * a[i] + beta * b[i];
+}
+
+// v[i] = D[i] * v[i]
+inline void DenseDiagMult(int n, double *diag, double *v, double *f)
+{
+#pragma omp parallel for simd schedule(dynamic,64)
+	for (int i = 0; i < n; i++)
+		f[i] = diag[i] * v[i];
+}
+
+void GenSolVector(int size, double *vector)
+{
+	srand((unsigned int)time(0));
+	for (int i = 0; i < size; i++)
+		vector[i] = random(0.0, 1.0);
+}
+
+void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
+			/* output */ double *G, int ldg, double *x_sol, int &success, double &RelRes, int &itcount)
 {
 	int size = n1 * n2 * n3;
 	double tt;
 	double tt1;
 	double eps = 5e-2;
+	printf("eps = %lf\n", eps);
 	tt = omp_get_wtime();
-	DirFactFastDiag(D, ldd, B, ldb, eps, smallsize, bench, G);
+	DirFactFastDiag(n1, n2, n3, D, ldd, B, G, ldg, eps, smallsize, bench);
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -690,7 +762,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 	}
 
 	tt = omp_get_wtime();
-	DirSolveFastDiag(G, ldg, B, ldb, f, x);
+	DirSolveFastDiag(n1, n2, n3, G, ldg, B, f, x_sol, eps, smallsize);
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -699,8 +771,10 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 
 	double *g = alloc_arr(size);
 	double *x1 = alloc_arr(size);
-	Resid(D, ldd, B, ldb, x, f, g, RelRes);
 	RelRes = 1;
+	Resid(n1, n2, n3, D, ldd, B, x_sol, f, g, RelRes);
+
+	printf("RelRes = %lf\n", RelRes);
 	if (RelRes < thresh)
 	{
 		success = 1;
@@ -715,11 +789,11 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 			while ((RelRes > thresh) && (itcount < ItRef))
 			{
 				tt = omp_get_wtime();
-				DirSolveFastDiag(n1, n2, n3, G, ldg, B, ldb, g, x1);
+				DirSolveFastDiag(n1, n2, n3, G, ldg, B, g, x1, eps, smallsize);
 				for (int i = 0; i < size; i++)
-					x[i] = x[i] + x1[i];
+					x_sol[i] = x_sol[i] + x1[i];
 
-				Resid(D, ldd, B, ldb, x, f, g, RelRes); // начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2, где
+				Resid(n1, n2, n3, D, ldd, B, x_sol, f, g, RelRes); // начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2, где
 				itcount = itcount + 1;
 				tt = omp_get_wtime() - tt;
 				if (compare_str(7, bench, "display")) printf("itcount=%d, RelRes=%lf, Time=%lf\n", itcount, RelRes, tt);
@@ -731,18 +805,72 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 		}
 	}
 
+	free_arr(&g);
+	free_arr(&x1);
+}
+
+
+// невязка g = Ax - f
+
+// RelRes - относительная невязка = ||g|| / ||f||
+void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x_sol, double *f, double *g, double &RelRes)
+{
+	int n = n1 * n2;
+	int NB = n3;
+	int size = n * NB;
+	double *f1 = alloc_arr(size);
+	double *f_help = alloc_arr(n);
+	double done = 1.0;
+	int ione = 1;
+
+	DenseDiagMult(n, &B[ind(0, n)], &x_sol[ind(1, n)], &f1[ind(0, n)]);
+	dsymv("Up", &n, &done, &D[ind(0, n)], &ldd, &x_sol[ind(0, n)], &ione, &done, &f1[ind(0, n)], &ione);
+
+	// f[N] = diag(B{N-1})*x{N-1} + D{N}*x{N};
+	DenseDiagMult(n, &B[ind(NB - 2, n)], &x_sol[ind(NB - 2, n)], &f1[ind(NB - 1, n)]);
+	dsymv("Up", &n, &done, &D[ind(NB - 1, n)], &ldd, &x_sol[ind(NB - 1, n)], &ione, &done, &f1[ind(NB - 1, n)], &ione);
+
+
+	// f{ i } = diag(B{ i - 1 })*x { i - 1 } + D{ i }*x{ i } + diag(B{ i })*x { i + 1 };
+	for (int blk = 1; blk < NB - 1; blk++)
+	{
+		//f{ i } = diag(B{ i - 1 })*x { i - 1 } + diag(B{ i })*x { i + 1 };
+		DenseDiagMult(n, &B[ind(blk - 1, n)], &x_sol[ind(blk - 1, n)], &f1[ind(blk, n)]);
+		DenseDiagMult(n, &B[ind(blk, n)], &x_sol[ind(blk + 1, n)], f_help);
+		daxpby(&n, &done, f_help, &ione, &done, &f1[ind(blk, n)], &ione);
+		//Add_dense_vect(n, done, &f1[ind(blk, n)], done, f_help, &f1[ind(blk, n)]);
+
+		// f{i} = f{i} + D{ i }*x{ i } 
+		dsymv("Up", &n, &done, &D[ind(blk, n)], &ldd, &x_sol[ind(blk, n)], &ione, &done, &f1[ind(blk, n)], &ione);
+	}
+
+#pragma omp parallel for simd
+	for (int i = 0; i < size; i++)
+		g[i] = f[i] - f1[i];
+
+//	print_vec(size, f, g, "f and g");
+
+	RelRes = dlange("Frob", &size, &ione, g, &size, NULL);
+	RelRes = RelRes / dlange("Frob", &size, &ione, f, &size, NULL);
+
+	free_arr(&f1);
+	free_arr(&f_help);
+
 }
 
 /* Функция вычисления разложения симметричной блочно-диагональной матрицы с использование сжатого формата. 
    Внедиагональные блоки предполагаются диагональными матрицами */
-void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, int ldb, double eps, int smallsize, char *bench,
-					 double *G /*factorized matrix*/, int ldg)
+void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, double *G /*factorized matrix*/, int ldg, 
+									 double eps, int smallsize, char *bench)
 {
 	int n = n1 * n2;
 	int NB = n3; // size of D = NB blocks by n elements
-	double *DC = alloc_arr(n);  int lddc = n2;
-	double *TD1 = alloc_arr(n); int ldtd = n2;
-	double *TD = alloc_arr(n);
+	int size = n * NB;
+	double *TD1 = alloc_arr(n * n); int ldtd = n;
+	double *TD = alloc_arr(n * n);
+	double *DC = alloc_arr(size * n); int lddc = size;
+
+	dlacpy("All", &size, &n, D, &ldd, DC, &lddc);
 	
 
 	if (compare_str(7, bench, "display"))
@@ -753,34 +881,40 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, int 
 	}
 
 	double tt = omp_get_wtime();
-	SymRecCompress(n, &D[0 * NB + ldd * 0], ldd, smallsize, eps, "SVD");
+	SymRecCompress(n, &DC[ind(0, n)], lddc, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
-	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf", tt);
+
+	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
 
 	tt = omp_get_wtime();
-	SymCompRecInv(DC, lddc, G, ldg, eps, "SVD");
+	SymCompRecInv(n, &DC[ind(0, n)], lddc, &G[ind(0, n)], ldg, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
-	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf", tt);
+	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
 
 
 	for (int k = 1; k < NB; k++)
 	{
 		tt = omp_get_wtime();
-		SymRecCompress(n, &D[k * n + ldd * 0], ldd, smallsize, eps, "SVD");
+		SymRecCompress(n, &DC[ind(k, n)], lddc, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
-		if (compare_str(7, bench, "display")) printf("Compressing D(%d) time: %lf", k, tt);
+		if (compare_str(7, bench, "display")) printf("Compressing D(%d) time: %lf\n", k, tt);
+
 		tt = omp_get_wtime();
-		DiagMult(TD1, ldtd, &B[(k - 1) * n + 0 * ldb]);
+		dlacpy("All", &n, &n, &G[ind(k - 1, n)], &ldg, TD1, &ldtd);
+		DiagMult(n, TD1, ldtd, &B[ind(k - 1, n)], smallsize);
 		tt = omp_get_wtime() - tt;
-		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf", k, tt);
+		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf\n", k, tt);
+
 		tt = omp_get_wtime();
-		Add(1, DC, lddc, -1, TD1, ldtd, TD, ldtd, eps, "SVD");
+		Add(n, 1.0, &DC[ind(k, n)], lddc, -1.0, TD1, ldtd, TD, ldtd, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
-		if (compare_str(7, bench, "display")) printf("Add %d time: %lf", k, tt);
+		if (compare_str(7, bench, "display")) printf("Add %d time: %lf\n", k, tt);
+
 		tt = omp_get_wtime();
-		SymCompRecInv(TD, ldtd, &G[k * n + ldg * 0], ldg, eps, "SVD");
+		SymCompRecInv(n, TD, ldtd, &G[ind(k,n) + ldg * 0], ldg, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
-		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf", k, tt);
+		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf\n", k, tt);
+		if (compare_str(7, bench, "display")) printf("\n");
 	}
 
 	if (compare_str(7, bench, "display"))
@@ -789,51 +923,65 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, int 
 		printf("End of DirFactFastDiag\n");
 		printf("****************************\n");
 	}
+
+	free_arr(&DC);
+	free_arr(&TD);
+	free_arr(&TD1);
 }
 
-void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, int ldb, double *f, double *x)
+void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize)
 {
 	int n = n1 * n2;
 	int NB = n3;
-	double *tb = alloc_arr(n * NB);
+	int size = n * NB;
+	double *tb = alloc_arr(size);
 	double *y = alloc_arr(n);
 
+#pragma omp parallel for simd
 	for (int i = 0; i < n; i++)
 		tb[i] = f[i];
 
+	//print_vec(n, &tb[ind(0, n)], &tb[ind(0, n)], "tb(0, n)");
+
 	for (int k = 1; k < NB; k++)
 	{
-		RecMult(&G[(k - 1) * n + ldg * 0], ldg, &tb[(k - 1) * n], y);
+		RecMultL(n, 1, &G[ind(k-1, n) + ldg * 0], ldg, &tb[ind(k - 1, n)], size, y, n, smallsize);	
+		DenseDiagMult(n, &B[ind(k - 1, n)], y, y);
+
+#pragma omp parallel for simd schedule(simd:static)
 		for (int i = 0; i < n; i++)
-			tb[i + k * n] = f[i + k * n] - B[i + (k - 1) * n] * y[i];
+			tb[ind(k, n) + i] = f[ind(k, n) + i] - y[i];
+
 	}
+	//print_vec(n, &tb[ind(NB - 1, n)], &tb[ind(NB - 1, n)], "tb(NB - 1, n)");
 
-	RecMult(&G[(NB - 1) * n + ldg * 0], ldg, &tb[(NB - 1) * n], &x[(NB - 1) * n]);
+	RecMultL(n, 1, &G[ind(NB - 1, n) + ldg * 0], ldg, &tb[ind(NB - 1, n)], size, &x[ind(NB - 1, n)], size, smallsize);
 
-	for (int k = NB - 2; k > 0; k--)
+	//print_vec(n, &x[ind(NB - 1, n)], &x[ind(NB - 1, n)], "x[ind(NB - 1, n)]");
+
+	for (int k = NB - 2; k >= 0; k--)
 	{
+		DenseDiagMult(n, &B[ind(k, n)], &x[ind(k + 1, n)], y);
+
+#pragma omp parallel for simd
 		for (int i = 0; i < n; i++)
-			y[i] = tb[i + k * n] - B[i + k * n] * x[i + (k + 1) * n];
-		RecMult(&G[k * n + ldg * 0], ldg, y, &x[k * n]);
+			y[i] = tb[ind(k, n) + i] - y[i];
+
+		RecMultL(n, 1, &G[ind(k, n) + ldg * 0], ldg, y, n, &x[ind(k, n)], size, smallsize);
 	}
+
+	free_arr(&tb);
+	free_arr(&y);
 }
 
-void SymCompRecInv(double *DC, int lddc, double *G, int ldg, double eps, char *str)
-{
 
-}
-
-void RecMult(double *G, int ldg, double *tb /* vector */, double *y)
-{
-
-}
-#endif
 // Рекурсивная функция вычисления DAD, где D - диагональная матрица, а A - сжатая
 void DiagMult(int n, double *A, int lda, double *d, int small_size)
 {
 
 	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
 	{
+#pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n; j++)
 			for (int i = 0; i < n; i++)
 			{
@@ -851,22 +999,19 @@ void DiagMult(int n, double *A, int lda, double *d, int small_size)
 		DiagMult(n2, &A[n1 + lda * n1], lda, &d[n1], small_size);
 
 		// D * U - каждая i-ая строка U умножается на элемент вектора d[i]
+#pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n1; j++)
 			for (int i = 0; i < n2; i++)
 				A[i + n1 + lda * (0 + j)] *= d[n1 + i]; // вторая часть массива D
 
 		// VT * D - каждый j-ый столбец умножается на элемент вектора d[j]
+#pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n2; j++)
 			for (int i = 0; i < n1; i++)
 				A[i + 0 + lda * (n1 + j)] *= d[j]; 
 		// так так вектора матрицы V из разложения A = U * V лежат в транспонированном порядке,
 		// то матрицу D стоит умножать на VT слева
 	}
-}
-
-void Resid(double *D, int ldd, double *B, int ldb, double *x, double *f, double *g, double &RelRes)
-{
-
 }
 
 void Test_DiagMult(int n, double eps, char *method, int smallsize)
@@ -933,8 +1078,8 @@ void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps)
 
 	norm = dlange("Frob", &n, &k, Hrec, &ldh, NULL);
 	norm = norm / dlange("Frob", &n, &k, Hinit, &ldh, NULL);
-	if (norm < EPS) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
-	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
+	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
+	else printf("Norm %10.8lf > eps %10.8lf : FAILED\n", norm, eps);
 }
 
 /* Y = A * X, where A - compressed n * n, X - dense n * m, Y - dense n * m */
@@ -950,10 +1095,10 @@ void RecMultL(int n, int m, double *A, int lda, double *X, int ldx, double *Y, i
 	{
 		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
 		int n1 = n - n2;
-		double *Y12 = alloc_arr(n1 * m);
-		double *Y21 = alloc_arr(n2 * m);
-		double *Y11 = alloc_arr(n1 * m);
-		double *Y22 = alloc_arr(n2 * m);
+		double *Y12 = alloc_arr(n1 * m); int ldy12 = n1;
+		double *Y21 = alloc_arr(n2 * m); int ldy21 = n2;
+		double *Y11 = alloc_arr(n1 * m); int ldy11 = n1;
+		double *Y22 = alloc_arr(n2 * m); int ldy22 = n2;
 		double *inter1 = alloc_arr(n2 * n1); // column major - lda = column
 		double *inter2 = alloc_arr(n1 * n2);
 	
@@ -961,24 +1106,26 @@ void RecMultL(int n, int m, double *A, int lda, double *X, int ldx, double *Y, i
 		dgemm("No", "No", &n2, &n1, &n1, &alpha, &A[n1 + lda * 0], &lda, &A[0 + lda * n1], &lda, &beta, inter1, &n2);
 		
 		// Y21 = inter1 (n2 x n1) * X(1...n1, :) (n1 x n)
-		dgemm("No", "No", &n2, &m, &n1, &alpha, inter1, &n2, &X[0 + 0 * ldx], &ldx, &beta, Y21, &n2);
+		dgemm("No", "No", &n2, &m, &n1, &alpha, inter1, &n2, &X[0 + 0 * ldx], &ldx, &beta, Y21, &ldy21);
 	
 		// A12 = A21*T = A12*T * A21*T (the result of multiplication is A21 matrix with size n1 x n2)
 		dgemm("Trans", "Trans", &n1, &n2, &n1, &alpha, &A[0 + lda * n1], &lda, &A[n1 + lda * 0], &lda, &beta, inter2, &n1);
 	
 		// Y12 = inter2 (n1 x n2) * X(n1...m, :) (n2 x n)
-		dgemm("No", "No", &n1, &m, &n2, &alpha, inter2, &n1, &X[n1 + 0 * ldx], &ldx, &beta, Y12, &n1); // уже транспонировали матрицу в предыдущем dgemm
+		dgemm("No", "No", &n1, &m, &n2, &alpha, inter2, &n1, &X[n1 + 0 * ldx], &ldx, &beta, Y12, &ldy12); // уже транспонировали матрицу в предыдущем dgemm
 
-		RecMultL(n1, m, &A[0 + lda * 0], lda, &X[0 + ldx * 0], ldx, Y11, n1, smallsize);
-		RecMultL(n2, m, &A[n1 + lda * n1], lda, &X[n1 + ldx * 0], ldx, Y22, n2, smallsize);
+		RecMultL(n1, m, &A[0 + lda * 0], lda, &X[0 + ldx * 0], ldx, Y11, ldy11, smallsize);
+		RecMultL(n2, m, &A[n1 + lda * n1], lda, &X[n1 + ldx * 0], ldx, Y22, ldy22, smallsize);
 
 		// first part of Y = Y11 + Y12
-		op_mat(n1, m, Y11, Y12, n1, '+');
-		dlacpy("All", &n1, &m, Y11, &n1, &Y[0 + ldy * 0], &ldy);
+		mkl_domatadd('C', 'N', 'N', n1, m, 1.0, Y11, ldy11, 1.0, Y12, ldy12, &Y[0 + ldy * 0], ldy);
+		// op_mat(n1, m, Y11, Y12, n1, '+');
+		// dlacpy("All", &n1, &m, Y11, &n1, &Y[0 + ldy * 0], &ldy);
 
 		// second part of Y = Y21 + Y22
-		op_mat(n2, m, Y21, Y22, n2, '+');
-		dlacpy("All", &n2, &m, Y21, &n2, &Y[n1 + ldy * 0], &ldy);
+		mkl_domatadd('C', 'N', 'N', n2, m, 1.0, Y21, ldy21, 1.0, Y22, ldy22, &Y[n1 + ldy * 0], ldy);
+		// op_mat(n2, m, Y21, Y22, n2, '+');
+		// dlacpy("All", &n2, &m, Y21, &n2, &Y[n1 + ldy * 0], &ldy);
 
 		free_arr(&Y11);
 		free_arr(&Y12);
@@ -1083,8 +1230,10 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 		// Y = V21'*V12;
 		double *Y = alloc_arr(mn * mn); int ldy = mn;
 
-		Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
-		Add_dense(n2, n1, beta, &B[n1 + ldb * 0], ldb, 0.0, B, ldb, &B[n1 + ldb * 0], ldb);
+		mkl_dimatcopy('C', 'N', n2, n1, alpha, &A[n1 + lda * 0], lda, lda);
+		mkl_dimatcopy('C', 'N', n2, n1, beta, &B[n1 + ldb * 0], ldb, ldb);
+		//Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
+		//Add_dense(n2, n1, beta, &B[n1 + ldb * 0], ldb, 0.0, B, ldb, &B[n1 + ldb * 0], ldb);
 
 		// Y21 = [alpha*A{2,1} beta*B{2,1}];
 		dlacpy("All", &n2, &n1, &A[n1 + lda * 0], &lda, &Y21[0 + ldy21 * 0], &ldy21);
@@ -1095,8 +1244,8 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 		dlacpy("All", &n1, &n2, &B[0 + ldb * n1], &ldb, &Y12[n1 + ldy12 * 0], &ldy12);
 
 		// произведение Y21 и Y12 - это матрица n2 x n1
-		LowRankApprox("SVD", n2, n1_dbl, Y21, ldy21, V21, ldv21, p); // перезапись Y21
-		LowRankApprox("SVD", n1_dbl, n1, Y12, ldy12, V12, ldv12, p);  // перезапись Y12
+		LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p, eps, "SVD"); // перезапись Y21
+		LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p, eps, "SVD");  // перезапись Y12
 
 
 		// Y = V21'*V12;
@@ -1121,7 +1270,7 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 
 }
 
-void Test_add(int n, double alpha, double beta, double smallsize, double eps, char *method)
+void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char *method)
 {
 	printf("*****Test for Add n = %d ******* ", n);
 	double *H1 = alloc_arr(n*n);
@@ -1134,6 +1283,7 @@ void Test_add(int n, double alpha, double beta, double smallsize, double eps, ch
 	int ldh = n;
 	int ldg = n;
 
+#pragma omp parallel for simd schedule(simd:static)
 	for (int j = 0; j < n; j++)
 		for (int i = 0; i < n; i++)
 		{
@@ -1180,7 +1330,7 @@ void Test_add(int n, double alpha, double beta, double smallsize, double eps, ch
 	free_arr(&GcR);
 }
 
-void Test_transpose(int m, int n, int smallsize, double eps, char *method)
+void Test_Transpose(int m, int n, int smallsize, double eps, char *method)
 {
 	double *H = alloc_arr(m * n); int ldh = m;
 	double *H_rec = alloc_arr(m * n);
@@ -1200,12 +1350,12 @@ void Test_transpose(int m, int n, int smallsize, double eps, char *method)
 		for (int i = 0; i < m; i++)
 		{
 			k++;
-			Htr[j + ldhtr * i] = 1.0 / (i + j + 1 + k);
 			H[i + ldh * j] = 1.0 / (i + j + 1 + k);
 		}
 
+	Mat_Trans(m, n, H, ldh, Htr, ldhtr);
 
-	LowRankApprox("SVD", n, m, Htr, ldhtr, Vtr, ldvtr, p);
+	LowRankApprox(n, m, Htr, ldhtr, Vtr, ldvtr, p, eps, "SVD");
 
 	dgemm("Trans", "Trans", &m, &n, &mn, &alpha, Vtr, &ldvtr, Htr, &ldhtr, &beta, H_rec, &ldh);
 	
@@ -1266,6 +1416,7 @@ void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, i
 		dlacpy("All", &n2, &n1, &A[n1 + lda * 0], &lda, &Y21[0 + ldy21 * 0], &ldy21);
 		dlacpy("All", &n2, &k, VY, &ldvy, &Y21[0 + ldy21 * n1], &ldy21);
 
+		//mkl_domatcopy('C', 'T', 1.0, n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
 		Mat_Trans(n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
 	
 		// Y12 = [A{1,2} V(1:n1,:)];
@@ -1273,10 +1424,10 @@ void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, i
 		dlacpy("All", &k, &n1, V_uptr, &ldvuptr, &Y12[n1 + ldy21 * 0], &ldy12);
 
 		// [U21,V21] = LowRankApprox (Y21, eps, method);
-		LowRankApprox("SVD", n2, nk, Y21, ldy21, V21, ldv21, p);
+		LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p, eps, "SVD");
 
 		// [U12, V12] = LowRankApprox(Y12, eps, method);
-		LowRankApprox("SVD", nk, n1, Y12, ldy12, V12, ldv12, p);
+		LowRankApprox(nk, n1, Y12, ldy12, V12, ldv12, p, eps, "SVD");
 
 
 		// B{2,1} = U21*(V21'*V12);
@@ -1324,9 +1475,11 @@ void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, 
 	Hilbert(n, HC, ldh);
 	Hilbert(n, H, ldh);
 
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < k; i++)
 		Y[i + ldy * i] = i + 1;
 
+#pragma omp parallel for simd schedule(simd:static)
 	for (int j = 0; j < k; j++)
 		for (int i = 0; i < n; i++)
 			V[i + ldv * j] = (i + j + 1);
@@ -1414,13 +1567,14 @@ void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize,
 		// Update X11 = A11 - V * UT * X22 * U * VT = | A11 - V * Y * VT | = | (n1 x n1) - (n1 x n1) * (n1 x n1) * (n1 x n1) |
 		Mat_Trans(n1, n1, &A[0 + lda * n1], lda, V, ldv);
 		SymCompUpdate2(n1, n1, &A[0 + lda * 0], lda, alpha_mone, Y, ldy, V, ldv, X11, ldx11, smallsize, eps, method);
-
+		
 		// Inversion of X11 to B11
 		SymCompRecInv(n1, X11, ldx11, &B[0 + ldb * 0], ldb, smallsize, eps, method);
 
 		// Fill B{1,2} as B12 = -B{1,1} * A{1,2} = -X11 * V = (n1 x n1) * (n1 x n1) in real (x2 x x1)
 		RecMultL(n1, n1, &B[0 + ldb * 0], ldb, V, ldv, B12, ldb12, smallsize);
-		Add_dense(n1, n1, alpha_mone, B12, ldb12, beta_zero, B, ldb, B12, ldb12);
+		mkl_dimatcopy('C', 'N', n1, n1, -1.0, B12, ldb12, ldb12);
+		//Add_dense(n1, n1, alpha_mone, B12, ldb12, beta_zero, B, ldb, B12, ldb12);
 
 		// B{1,2} = transpose(B12)
 		Mat_Trans(n1, n1, B12, ldb12, &B[0 + ldb * n1], ldb);
@@ -1441,7 +1595,7 @@ void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize,
 
 void Test_SymCompRecInv(int n, int smallsize, double eps, char *method)
 {
-	printf("***** Test_SymCompRecInv n = %d **** \n", n);
+	printf("***** Test_SymCompRecInv n = %d eps = %lf **** ", n, eps);
 	double *H = alloc_arr(n * n);
 	double *Hc = alloc_arr(n * n);
 	double *Bc = alloc_arr(n * n);
@@ -1491,6 +1645,7 @@ void Eye(int n, double *H, int ldh)
 
 void Hilbert(int n, double *H, int ldh)
 {
+#pragma omp parallel for simd schedule(simd:static)
 	for (int j = 0; j < n; j++)
 		for (int i = 0; i < n; i++)
 			H[i + ldh * j] = 1.0 / (i + j + 1);
@@ -1498,6 +1653,7 @@ void Hilbert(int n, double *H, int ldh)
 
 void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr)
 {
+#pragma omp parallel for simd schedule(simd:static)
 	for (int j = 0; j < n; j++)
 		for (int i = 0; i < m; i++)
 			Hcomp_tr[j + ldhtr * i] = H[i + ldh * j];
@@ -1505,12 +1661,34 @@ void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr)
 
 void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, double *B, int ldb, double *C, int ldc)
 {
+	double dzero = 0.0;
 
-#pragma omp parallel for
-	for (int j = 0; j < n; j++)
+	if (beta == dzero)
 	{
-		for (int i = 0; i < m; i++)
-			C[i + ldc * j] = alpha * A[i + lda * j] + beta * B[i + ldb * j];
+#pragma omp parallel for simd schedule(simd:static)
+		for (int j = 0; j < n; j++)
+		{
+			for (int i = 0; i < m; i++)
+				C[i + ldc * j] = alpha * A[i + lda * j];
+		}
+	}
+	else if (alpha == dzero)
+	{
+#pragma omp parallel for simd schedule(simd:static)
+		for (int j = 0; j < n; j++)
+		{
+			for (int i = 0; i < m; i++)
+				C[i + ldc * j] = beta * B[i + ldb * j];
+		}
+	}
+	else
+	{
+#pragma omp parallel for simd schedule(simd:static)
+		for (int j = 0; j < n; j++)
+		{
+			for (int i = 0; i < m; i++)
+				C[i + ldc * j] = alpha * A[i + lda * j] + beta * B[i + ldb * j];
+		}
 	}
 }
 
@@ -1518,12 +1696,14 @@ void op_mat(int m, int n, double *Y11, double *Y12, int ldy, char sign)
 {
 	if (sign == '+')
 	{
+#pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n; j++)
 			for (int i = 0; i < m; i++)
 				Y11[i + ldy * j] += Y12[i + ldy *j];
 	}
 	else if (sign == '-')
 	{
+#pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n; j++)
 			for (int i = 0; i < m; i++)
 				Y11[i + ldy * j] -= Y12[i + ldy *j];
@@ -1564,6 +1744,7 @@ void print_map(const map<vector<int>, double>& SD)
 	cout << SD.size() << endl;
 	for (const auto& item : SD)
 		cout << "m = " << item.first[0] << " n = " << item.first[1] << " value = " << item.second << endl;
+
 }
 
 double random(double min, double max)

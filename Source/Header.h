@@ -14,12 +14,12 @@ using namespace std;
 #include "templates.h"
 
 
-#define PROBLEM 9
+#define PROBLEM 2
 
 
 #define N 10
 
-#if (PROBLEM == 6)
+#if (PROBLEM == 5)
 //#define DEBUG
 #endif
 

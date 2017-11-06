@@ -60,17 +60,18 @@ int main()
 
 #elif (PROBLEM == 1)
 	int n = 10;
-	double eps = 1e-4;
+	double eps = 1e-2;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
 	for (int n = 3; n <= 10; n++)
-		Test_SymRecCompress(n, eps, method, smallsize);
+		for(double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_SymRecCompress(n, eps, method, smallsize);
 
 #elif (PROBLEM == 2)
-	int n1 = 4; // number of point across the directions
-	int n2 = 4;
-	int n3 = 4;
+	int n1 = 40; // number of point across the directions
+	int n2 = 40;
+	int n3 = 10;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
 	int size = n * NB; // size of vector x and f: n1 * n2 * n3
@@ -80,28 +81,27 @@ int main()
 	char bench[255] = "display"; // parameter into solver to show internal results
 	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
 
+	// the size of matrix A: n^3 * n^3 = n^6
+	// here we have n^2 * n = n^3 
 	// init
-	double *D = alloc_arr(sparse_size * NB);
+	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
 	double *B = alloc_arr(size - NB); // vector of diagonal elements
-	double *x1 = alloc_arr(size);
+	double *x_orig = alloc_arr(size);
 	double *f = alloc_arr(size);
 
 	// result obtained
-	double *G = alloc_arr(1);
-	double *x = alloc_arr(size);
+	double *G = alloc_arr(size * n);
+	double *x_sol = alloc_arr(size);
 
-	int ldd = 0;
-	int ldb = 0;
-	int ldg = 0;
+	int ldd = size;
+	int ldg = size;
 
 	int success = 0;
 	int itcount = 0;
 	double RelRes = 0;
 
 	// Generation matrix of coefficients, vector of solution (to compare with obtained) and vector of RHS
-	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, ldb, x1, f);
-
-	print_vec(size, x1, f, "vector x1 and f");
+	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, x_orig, f);
 
 	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
 	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
@@ -109,36 +109,32 @@ int main()
 	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
 
 	// Calling the solver
-	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, ldb, f, thresh, smallsize, ItRef, bench, G, ldg, x, success, RelRes, itcount);
+	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
 
 	printf("success=%d, itcount=%d\n", success, itcount);
 	printf("-----------------------------------\n");
-	printf("Computing error\n");
 	
-	double normx = 0;
-	double normy = 0;
-	int ione = 1;
+	//print_vec(size, x_orig, x_sol, "x_orig and x_sol");
 
+	printf("Computing error ||x-x_{comp}||/||x||\n");
+	rel_error(n, 1, x_orig, x_sol, size, thresh);
 
-/*
-#pragma omp parallel for
-	for (int i = 0; i < size; i++)
-		x[i] -= x1[i];
-
-	normy = dnrm2(&size, x, &ione);
-	normx = dnrm2(&size, x1, &ione);
-
-	printf("relative error %lf\n", normy/normx);*/
+	free_arr(&D);
+	free_arr(&B);
+	free_arr(&x_orig);
+	free_arr(&x_sol);
+	free_arr(&f);
 
 #elif (PROBLEM == 3)
 	int n = 10;
-	double eps = 1e-4;
+	double eps = 1e-8;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
 	// Test compress relative error of Hd and H2
 	for (int n = 3; n <= 10; n++)
-		Test_DiagMult(n, eps, method, smallsize);
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_DiagMult(n, eps, method, smallsize);
 
 #elif (PROBLEM == 4)
 ///	int n = 5;
@@ -148,18 +144,21 @@ int main()
 	int smallsize = 3;
 
 	// Test compress relative error of Y1(recovered) and Y (init)
-	for (int n = 3; n <= 10; n++)
-		for (int k = 1; k <= 10; k++)
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int k = 1; k <= 10; k++)
 			Test_RecMultL(n, k, eps, method, smallsize);
 #elif (PROBLEM == 5)
 	int m = 8;
 	int n = 10;
 	double eps = 1e-5;
 	char method[255] = "SVD";
-	for (int i = 0; i < TEST_IT; i++)
-	{
-		Test_LowRankApprox_InitA(m, n, eps, method);
-	}
+
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int n = 1; n <= 10; n++)
+				Test_LowRankApprox(m, n, eps, method);
+
 #elif (PROBLEM == 6)
 	int n = 5;
 	double eps = 1e-4;
@@ -169,7 +168,8 @@ int main()
 	double beta = -1.0;
 
 	for (int n = 3; n <= 10; n++)
-		Test_add(n, alpha, beta, smallsize, eps, method);
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_Add(n, alpha, beta, smallsize, eps, method);
 
 #elif (PROBLEM == 7)
 	int m = 3;
@@ -178,9 +178,10 @@ int main()
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	for (int n = 3; n <= 10; n++)
-		for (int m = 2; m <= 10; m++)
-			Test_transpose(m, n, smallsize, eps, method);
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int m = 2; m <= 10; m++)
+				Test_Transpose(m, n, smallsize, eps, method);
 
 #elif (PROBLEM == 8)
 
@@ -191,9 +192,10 @@ int main()
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	for (int n = 3; n <= 10; n++)
-		for (int k = 1; k <= 10; k++)
-			Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int k = 1; k <= 10; k++)
+				Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
 
 #elif (PROBLEM == 9) // test for inversion of compressed matrix
 
@@ -202,8 +204,9 @@ int main()
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	for (int n = 3; n <= 10; n++)
-		Test_SymCompRecInv(n, smallsize, eps, method);
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			Test_SymCompRecInv(n, smallsize, eps, method);
 
 #endif
 	system("pause");

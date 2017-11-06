@@ -17,11 +17,11 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 // HSS
 
 void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
-	const int small_size, int eps,
+	const int small_size, double eps,
 	char *method /* SVD or other */);
 
-void LowRankApprox(char *method, int n2, int n1 /* size of A21 = A */,
-	double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv, int&p);
+void LowRankApprox(int n2, int n1 /* size of A21 = A */, double *A /* A is overwritten by U */, int lda,
+							double *V /* V is stored in A12 */, int ldv, int&p, double eps, char *method);
 
 void SymResRestore(int n, double *H1, double *H2, int ldh, int p);
 void DiagMult(int n, double *A, int lda, double *d, int small_size);
@@ -33,12 +33,12 @@ void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize,
 // Solver
 
 void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3,
-	/* output */ double *D, int ldd, double *B, int ldb, double *x1, double *f);
-void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, int ldb, double *f, double thresh, int smallsize, int ItRef, char *bench,
+	/* output */ double *D, int ldd, double *B, double *x1, double *f);
+void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount);
 
-void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, int ldb, double eps, int smallsize, char *bench, double *G /*factorized matrix*/, int ldg);
-void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, int ldb, double *f, double *x);
+void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, double *G /*factorized matrix*/, int ldg, double eps, int smallsize, char *bench);
+void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize);
 
 
 // Tests
@@ -46,11 +46,11 @@ void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, int
 void Test_SymRecCompress(int n, double eps, char *method, int smallsize);
 void Test_DiagMult(int n, double eps, char *method, int smallsize);
 void Test_RecMultL(int n, int k, double eps, char *method, int smallsize);
-void Test_add(int n, double alpha, double beta, double smallsize, double eps, char *method);
-void Test_LowRankApprox_InitA(int m, int n, double eps, char *method);
+void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char *method);
+void Test_LowRankApprox(int m, int n, double eps, char *method);
 void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, char* method);
 void Test_SymCompRecInv(int n, int smallsize, double eps, char *method);
-void Test_transpose(int m, int n, int smallsize, double eps, char *method);
+void Test_Transpose(int m, int n, int smallsize, double eps, char *method);
 
 // Support
 
@@ -64,7 +64,11 @@ double random(double min, double max);
 void print_vec(int size, double *vec1, double *vec2, char *name);
 void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps);
 int compare_str(int n, char *s1, char *s2);
-void Resid(double *D, int ldd, double *B, int ldb, double *x, double *f, double *g, double &RelRes);
+void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x, double *f, double *g, double &RelRes);
 void print_map(const map<vector<int>, double>& SD);
 void Eye(int n, double *H, int ldh);
 map<vector<int>, double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);
+int ind(int j, int n);
+void Add_dense_vect(int n, double alpha, double *a, double beta, double *b, double *c);
+void GenSolVector(int size, double *x1);
+void DenseDiagMult(int n, double *diag, double *v, double *f);
