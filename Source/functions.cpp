@@ -351,35 +351,6 @@ void construct_U(int nbl, int n2, int n3, double *A, int ldA, double *U_f, int l
 
 // ---------- Compressed matrices --------------
 
-void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,  
-	const int small_size, double eps, 
-	char *method /* SVD or other */)
-{
-	int ldu, ldv;
-
-	if (n <= small_size)
-	{
-		return;
-	}
-	else 
-	{
-		int n1, n2; // error 3  - неправильное выделение подматриц - похоже на проблему 2
-		n2 = (int)ceil(n / 2.0); // округление в большую сторону
-		n1 = n - n2; // n2 > n1
-		int p = 0; // число значимых сингулярных чисел == rank
-
-#ifdef DEBUG
-		printf("SymRecCompress: n = %d n1 = %d n2 = %d\n", n, n1, n2);
-#endif
-
-		// LowRank A21
-		LowRankApprox(n2, n1, &A[n1 + lda * 0], lda, &A[0 + lda * n1], lda, p, eps, method);
-
-		SymRecCompress(n1, &A[0 + lda * 0], lda, small_size, eps, method);
-		SymRecCompress(n2, &A[n1 + lda * n1], lda, small_size, eps, method);
-	}
-}
-
 // Low Rank approximation
 void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 					double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv, int &p, double eps, char *method)
@@ -422,7 +393,9 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 #ifdef DEBUG
 		printf("LowRank after SVD: n2 = %d, n1 = %d, p = %d\n", n2, n1, p);
 #endif
-							// n1
+
+#if(PROBLEM != 5)
+		// n1
 		for (int j = p; j < mn; j++)   // original part: [n2 x n1], but overwritten part [n2 x min(n2,n1)]
 			for (int i = 0; i < n2; i++)
 				A[i + lda * j] = 0;
@@ -430,7 +403,7 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 		for (int j = 0; j < n1; j++)   // transposed part: [min(n2,n1) x n1] 
 			for (int i = p; i < mn; i++)
 				V[i + ldv * j] = 0;
-
+#endif
 		free(work);
 	}
 	else
@@ -443,7 +416,7 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 
 void Test_LowRankApprox(int m, int n, double eps, char *method)
 {
-	printf("Test for LowRankApproximation m = %d n = %d eps = %lf ", m, n, eps);
+	printf("Test for LowRankApproximation m = %d n = %d ", m, n);
 	// A - matrix in dense order
 	double *A = alloc_arr(m * n);
 	double *A_init = alloc_arr(m * n);
@@ -468,19 +441,39 @@ void Test_LowRankApprox(int m, int n, double eps, char *method)
 	p = 0;
 	LowRankApprox(m, n, A, lda, V, ldv, p, eps, "SVD");
 
-	dgemm("no", "no", &m, &n, &mn, &alpha, A, &lda, V, &ldv, &beta, A_rec, &lda);
+	dgemm("no", "no", &m, &n, &p, &alpha, A, &lda, V, &ldv, &beta, A_rec, &lda);
 
 	rel_error(m, n, A_rec, A_init, lda, eps);
 
 }
 
-int compare_str(int n, char *s1, char *s2)
+void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
+	const int small_size, double eps,
+	char *method /* SVD or other */)
 {
-	for (int i = 0; i < n; i++)
+	int ldu, ldv;
+
+	if (n <= small_size)
 	{
-		if (s1[i] != s2[i]) return 0;
+		return;
 	}
-	return 1;
+	else
+	{
+		int n1, n2; // error 3  - неправильное выделение подматриц - похоже на проблему 2
+		n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		n1 = n - n2; // n2 > n1
+		int p = 0; // число значимых сингулярных чисел == rank
+
+#ifdef DEBUG
+		printf("SymRecCompress: n = %d n1 = %d n2 = %d\n", n, n1, n2);
+#endif
+
+		// LowRank A21
+		LowRankApprox(n2, n1, &A[n1 + lda * 0], lda, &A[0 + lda * n1], lda, p, eps, method);
+
+		SymRecCompress(n1, &A[0 + lda * 0], lda, small_size, eps, method);
+		SymRecCompress(n2, &A[n1 + lda * n1], lda, small_size, eps, method);
+	}
 }
 
 void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered */, int ldh, int small_size)
@@ -1210,7 +1203,7 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 	}
 	else
 	{
-		int p = 0;
+		int p1 = 0, p2 = 0;
 		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
 		int n1 = n - n2;
 
@@ -1244,18 +1237,18 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 		dlacpy("All", &n1, &n2, &B[0 + ldb * n1], &ldb, &Y12[n1 + ldy12 * 0], &ldy12);
 
 		// произведение Y21 и Y12 - это матрица n2 x n1
-		LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p, eps, "SVD"); // перезапись Y21
-		LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p, eps, "SVD");  // перезапись Y12
+		LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p1, eps, "SVD"); // перезапись Y21
+		LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");  // перезапись Y12
 
 
 		// Y = V21'*V12;
-		dgemm("No", "No", &mn, &mn, &n1_dbl, &alpha_loc, V21, &ldv21, Y12, &ldy12, &beta_loc, Y, &ldy);
+		dgemm("No", "No", &p1, &p2, &n1_dbl, &alpha_loc, V21, &ldv21, Y12, &ldy12, &beta_loc, Y, &ldy); // mn, mn
 
 		// C{2,1} = U21*Y;   
-		dgemm("No", "No", &n2, &n1, &mn, &alpha_loc, Y21, &ldy21, Y, &ldy, &beta_loc, &C[n1 + ldc * 0], &ldc);
+		dgemm("No", "No", &n2, &n1, &p1, &alpha_loc, Y21, &ldy21, Y, &ldy, &beta_loc, &C[n1 + ldc * 0], &ldc); // mn
 
 		// C{1,2} = U12';
-		dlacpy("All", &n1, &n2, V12, &ldv12, &C[0 + ldc * n1], &ldc);
+		dlacpy("All", &p2, &n1, V12, &ldv12, &C[0 + ldc * n1], &ldc); // n1, n2
 
 
 		Add(n1, alpha, &A[0 + lda * 0], lda, beta, &B[0 + ldb * 0], ldb, &C[0 + ldc * 0], ldc, smallsize, eps, method);
@@ -1758,3 +1751,13 @@ void print_vec(int size, double *vec1, double *vec2, char *name)
 	for (int i = 0; i < size; i++)
 		printf("%d   %lf   %lf\n", i, vec1[i], vec2[i]);
 }
+
+int compare_str(int n, char *s1, char *s2)
+{
+	for (int i = 0; i < n; i++)
+	{
+		if (s1[i] != s2[i]) return 0;
+	}
+	return 1;
+}
+
