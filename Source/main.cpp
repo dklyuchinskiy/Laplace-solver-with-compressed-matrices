@@ -69,15 +69,15 @@ int main()
 			Test_SymRecCompress(n, eps, method, smallsize);
 
 #elif (PROBLEM == 2)
-	int n1 = 40; // number of point across the directions
-	int n2 = 40;
-	int n3 = 10;
+	int n1 = 39; // number of point across the directions
+	int n2 = 39;
+	int n3 = 39;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
 	int size = n * NB; // size of vector x and f: n1 * n2 * n3
 	int smallsize = 400;
-	double thresh = 1e-6; // stop level of algorithm by relative error
-	int ItRef = 100; // Maximal number of iterations in refirement
+	double thresh = 1e-4; // stop level of algorithm by relative error
+	int ItRef = 200; // Maximal number of iterations in refirement
 	char bench[255] = "display"; // parameter into solver to show internal results
 	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
 
@@ -85,7 +85,7 @@ int main()
 	// here we have n^2 * n = n^3 
 	// init
 	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
-	double *B = alloc_arr(size - NB); // vector of diagonal elements
+	double *B = alloc_arr(size - n); // vector of diagonal elements
 	double *x_orig = alloc_arr(size);
 	double *f = alloc_arr(size);
 
@@ -99,7 +99,15 @@ int main()
 	int success = 0;
 	int itcount = 0;
 	double RelRes = 0;
+	int nthr;
 
+#pragma omp parallel
+{
+	nthr = omp_get_num_threads();
+	int ithr = omp_get_thread_num();
+	if (ithr == 0) printf("Run in parallel on %d threads\n", nthr);
+}
+#if (TEST == 0)
 	// Generation matrix of coefficients, vector of solution (to compare with obtained) and vector of RHS
 	GenMatrixandRHSandSolution(n1, n2, n3, D, ldd, B, x_orig, f);
 
@@ -116,8 +124,43 @@ int main()
 	
 	//print_vec(size, x_orig, x_sol, "x_orig and x_sol");
 
-	printf("Computing error ||x-x_{comp}||/||x||\n");
-	rel_error(n, 1, x_orig, x_sol, size, thresh);
+	printf("Computing error ||x_{comp}-x_{orig}||/||x_{orig}||\n");
+	rel_error(n, 1, x_sol, x_orig, size, thresh);
+#elif (TEST == 1)
+		
+	size_m x, y, z;
+
+	x.n = n1;
+	y.n = n2;
+	z.n = n3;
+
+	x.l = y.l = z.l = 1;
+	x.h = x.l / (double)(x.n + 1);
+	y.h = y.l / (double)(y.n + 1);
+	z.h = z.l / (double)(z.n + 1);
+
+	printf("%lf %lf %lf\n", x.h, y.h, z.h);
+
+	GenMatrixandRHSandSolution2(x, y, z, D, ldd, B, x_orig, f);
+
+	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
+	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
+	printf("Compressed blocks method\n");
+	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
+
+	// Calling the solver
+	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
+
+	printf("success=%d, itcount=%d\n", success, itcount);
+	printf("-----------------------------------\n");
+
+	//print_vec(size, x_orig, x_sol, "x_orig and x_sol");
+
+	printf("Computing error ||x_{exact}-x_{comp}||/||x_{exact}||\n");
+	rel_error(n, 1, x_sol, x_orig, size, thresh);
+
+
+#endif
 
 	free_arr(&D);
 	free_arr(&B);

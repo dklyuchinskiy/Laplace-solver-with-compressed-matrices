@@ -40,6 +40,10 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, double *G /*factorized matrix*/, int ldg, double eps, int smallsize, char *bench);
 void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize);
 
+void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
+	/* output */ double *D, int ldd, double *B, double *x1, double *f);
+
+
 
 // Tests
 
@@ -72,3 +76,6 @@ int ind(int j, int n);
 void Add_dense_vect(int n, double alpha, double *a, double beta, double *b, double *c);
 void GenSolVector(int size, double *x1);
 void DenseDiagMult(int n, double *diag, double *v, double *f);
+double F_ex(double x, double y, double z);
+double u_ex(double x, double y, double z);
+void Mult_Au(int n1, int n2, int n3, double *D, int ldd, double *B, double *u, double *Au /*output*/);

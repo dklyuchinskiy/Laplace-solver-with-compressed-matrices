@@ -6,6 +6,7 @@ void print(int m, int n, double *u, int ldu, char *mess)
 	printf("%s\n", mess);
 	for (int i = 0; i < m; i++)
 	{
+		printf("%d ", i);
 		for (int j = 0; j < n; j++)
 		{
 			printf("%5.2lf ", u[i + ldu*j]);
@@ -17,6 +18,25 @@ void print(int m, int n, double *u, int ldu, char *mess)
 
 	printf("\n");
 	
+}
+
+void print_vec_mat(int m, int n, double *u, int ldu, double *vec, char *mess)
+{
+	printf("%s\n", mess);
+	for (int i = 0; i < m; i++)
+	{
+		printf("%d ", i);
+		for (int j = 0; j < n; j++)
+		{
+			printf("%5.2lf ", u[i + ldu*j]);
+			//if (j % N == N - 1) printf("|");
+		}
+		printf("  %lf\n",vec[i]);
+		//if (i % N == N - 1) printf("\n");
+	}
+
+	printf("\n");
+
 }
 
 // Функция выделения памяти под массив
@@ -696,7 +716,7 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 	// f{ i } = diag(B{ i - 1 }) * x{ i - 1 } + D{ i } * x{ i } + diag(B{ i }) * x{ i + 1 };
 	for (int blk = 1; blk < nbr - 1; blk++)
 	{
-		//f{ i } = diag(B{ i - 1 }) * x { i - 1 } + diag(B{ i }) *x { i + 1 };
+		// f{ i } = diag(B{ i - 1 }) * x { i - 1 } + diag(B{ i }) * x { i + 1 };
 		DenseDiagMult(n, &B[ind(blk - 1, n)], &x1[ind(blk - 1, n)], &f[ind(blk, n)]);
 		DenseDiagMult(n, &B[ind(blk, n)], &x1[ind(blk + 1, n)], f_help);
 		daxpby(&n, &done, f_help, &ione, &done, &f[ind(blk, n)], &ione);
@@ -714,11 +734,164 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 	free_arr(&d);
 	free(i_ind);
 	free(j_ind);
+	free_arr(&f_help);
+}
+
+double F_ex(double x, double y, double z)
+{
+//	return -12.0 * PI * PI * sin(2 * PI * x) * sin(2 * PI * y) * sin(2 * PI * z);
+	return 0;
+}
+
+double u_ex(double x, double y, double z)
+{
+//	return 2.0 + sin(2 * PI * x) * sin(2 * PI * y) * sin(2 * PI * z);
+	return x * x + y * y - 2.0 * z * z;
+}
+
+void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
+	/* output */ double *D, int ldd, double *B, double *u, double *f)
+{
+	int n = x.n * y.n; // size of blocks
+	int nbr = z.n; // number of blocks in one row
+	int lddd = n;
+	int size = n * nbr;
+	double eps = 1e-6;
+	double done = 1.0;
+	double dzero = 0.0;
+	int ione = 1;
+
+	double *DD = alloc_arr(n * n); // 2D diagonal template block
+	double *Au = alloc_arr(size); // mult of generated A and exact solution u
+
+	// n - number of unknowns
+	// n * n * n - all unknowns
+
+	// f_rhs = f_inner + f_bound
+
+	// approximation of exact right hand side (inner grid points)
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < nbr; k++)
+		for (int j = 0; j < y.n; j++)
+			for (int i = 0; i < x.n; i++)
+				f[k * n + j * x.n + i] = F_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
+
+	// for boundaries z = 0 and z = Lz we distract blocks B0 and Bm from the RHS
+#pragma omp parallel for schedule(dynamic,16)
+	for (int j = 0; j < y.n; j++)
+		for (int i = 0; i < x.n; i++)
+		{
+			f[ind(0, n) + ind(j, x.n) + i] -= u_ex((i + 1) * x.h, (j + 1) * y.h, 0) / (z.h * z.h); // u|z = 0
+			f[ind(nbr - 1, n) + ind(j, x.n) + i] -= u_ex((i + 1)  * x.h, (j + 1) * y.h, z.l) / (z.h * z.h); // u|z = h
+		}
+
+
+	// for each boundary 0 <= z <= Lz
+	// we distract 4 known boundaries f0, fl, g0, gL from right hand side
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < nbr; k++)
+	{
+			for (int i = 0; i < x.n; i++)
+			{
+				f[k * n + 0 * x.n + i] -= u_ex((i + 1) * x.h, 0, (k + 1) * z.h) / (y.h * y.h);
+				f[k * n + (y.n - 1) * x.n + i] -= u_ex((i + 1) * x.h, y.l, (k + 1) * z.h) / (y.h * y.h);
+			}
+			for (int j = 0; j < y.n; j++)
+			{
+				f[k * n + j * x.n + 0] -= u_ex(0, (j + 1) * y.h, (k  + 1) * z.h) / (x.h * x.h);
+				f[k * n + j * x.n + x.n - 1] -= u_ex(x.l, (j + 1) * y.h, (k + 1) * z.h) / (x.h * x.h);
+			}
+	}
+//	if (i % x.n == 0 || (i + 1) % x.n == 0) DD[i + lddd * i] = 1.0;
+
+	// diagonal blocks in dense format
+	for (int i = 0; i < n; i++)
+	{
+		DD[i + lddd * i] = -2.0 * (1.0/(x.h * x.h) + 1.0/(y.h * y.h) + 1.0/(z.h * z.h));
+		if (i > 0) DD[i + lddd * (i - 1)] = 1.0 / (x.h * x.h);
+		if (i < n - 1) DD[i + lddd * (i + 1)] = 1.0 / (x.h * x.h);
+		if (i >= x.n) DD[i + lddd * (i - x.n)] = 1.0 / (y.h * y.h);
+		if (i <= n - x.n - 1)  DD[i + lddd * (i + x.n)] = 1.0 / (y.h * y.h);
+
+		if (i % x.n == 0 && i > 0)
+		{
+			DD[i - 1 + lddd * i] = 0;
+			DD[i + lddd * (i - 1)] = 0;
+		}
+		
+	}
+
+#pragma omp parallel for schedule(dynamic)
+	for (int j = 0; j < nbr - 1; j++)
+		for (int i = 0; i < n; i++)
+			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
+						
+#pragma omp parallel for schedule(dynamic)
+	for (int j = 0; j < nbr; j++)
+	{
+		dlacpy("All", &n, &n, DD, &lddd, &D[ind(j, n) + ldd * 0], &ldd);
+	}
+	
+	// approximation of inner points values
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < nbr; k++)
+		for (int j = 0; j < y.n; j++)
+			for (int i = 0; i < x.n; i++)
+				u[ind(k, n) + ind(j, x.n) + i] = u_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
+	
+	Mult_Au(x.n, y.n, z.n, D, ldd, B, u, Au);
+
+#ifdef DEBUG
+	print_vec(size - n, B, B, "B_vector");
+	print_vec_mat(size, n, D, ldd, u, "D and u");
+	print_vec(size, Au, f, "Au_ex vs F_ex");
+	system("pause");
+#endif
+
+	// check error between Au and F
+	rel_error(size, 1.0, Au, f, size, eps);
+
+	free_arr(&Au);
+	free_arr(&DD);
+
+}
+
+void Mult_Au(int n1, int n2, int n3, double *D, int ldd, double *B, double *u, double *Au /*output*/)
+{
+	int n = n1 * n2;
+	int nbr = n3;
+	int size = n * nbr;
+	double done = 1.0;
+	double dzero = 0.0;
+	int ione = 1;
+	double *f_help = alloc_arr(n);
+
+	// f[1] = D{1} * x{1} + diag(B{1}) * x{2};
+	DenseDiagMult(n, &B[ind(0, n)], &u[ind(1, n)], &Au[ind(0, n)]);
+	dgemv("No", &n, &n, &done, &D[ind(0, n)], &ldd, &u[ind(0, n)], &ione, &done, &Au[ind(0, n)], &ione);
+
+	// f[N] = diag(B{N-1}) * x{N-1} + D{N} * x{N};
+	DenseDiagMult(n, &B[ind(nbr - 2, n)], &u[ind(nbr - 2, n)], &Au[ind(nbr - 1, n)]);
+	dgemv("No", &n, &n, &done, &D[ind(nbr - 1, n)], &ldd, &u[ind(nbr - 1, n)], &ione, &done, &Au[ind(nbr - 1, n)], &ione);
+
+	// f{ i } = diag(B{ i - 1 }) * x{ i - 1 } + D{ i } * x{ i } + diag(B{ i }) * x{ i + 1 };
+	for (int blk = 1; blk < nbr - 1; blk++)
+	{
+		// f{ i } = diag(B{ i - 1 }) * x { i - 1 } + diag(B{ i }) * x { i + 1 };
+		DenseDiagMult(n, &B[ind(blk - 1, n)], &u[ind(blk - 1, n)], &Au[ind(blk, n)]);
+		DenseDiagMult(n, &B[ind(blk, n)], &u[ind(blk + 1, n)], f_help);
+		daxpby(&n, &done, f_help, &ione, &done, &Au[ind(blk, n)], &ione);
+
+		// f{i} = f{i} + D{ i } * x{ i }  matrix D - non symmetric
+		dgemv("No", &n, &n, &done, &D[ind(blk, n)], &ldd, &u[ind(blk, n)], &ione, &done, &Au[ind(blk, n)], &ione);
+	}
+
+	free_arr(&f_help);
 }
 
 inline void Add_dense_vect(int n, double alpha, double *a, double beta, double *b, double *c)
 {
-#pragma omp parallel for simd schedule(dynamic,64)
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < n; i++)
 		c[i] = alpha * a[i] + beta * b[i];
 }
@@ -726,7 +899,7 @@ inline void Add_dense_vect(int n, double alpha, double *a, double beta, double *
 // v[i] = D[i] * v[i]
 inline void DenseDiagMult(int n, double *diag, double *v, double *f)
 {
-#pragma omp parallel for simd schedule(dynamic,64)
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < n; i++)
 		f[i] = diag[i] * v[i];
 }
@@ -783,6 +956,8 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 			{
 				tt = omp_get_wtime();
 				DirSolveFastDiag(n1, n2, n3, G, ldg, B, g, x1, eps, smallsize);
+
+#pragma omp parallel for simd schedule(simd:static)
 				for (int i = 0; i < size; i++)
 					x_sol[i] = x_sol[i] + x1[i];
 
@@ -802,46 +977,28 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 	free_arr(&x1);
 }
 
-
 // невязка g = Ax - f
 
 // RelRes - относительная невязка = ||g|| / ||f||
 void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x_sol, double *f, double *g, double &RelRes)
 {
 	int n = n1 * n2;
-	int NB = n3;
-	int size = n * NB;
+	int nbr = n3;
+	int size = n * nbr;
 	double *f1 = alloc_arr(size);
 	double *f_help = alloc_arr(n);
 	double done = 1.0;
 	int ione = 1;
 
-	DenseDiagMult(n, &B[ind(0, n)], &x_sol[ind(1, n)], &f1[ind(0, n)]);
-	dsymv("Up", &n, &done, &D[ind(0, n)], &ldd, &x_sol[ind(0, n)], &ione, &done, &f1[ind(0, n)], &ione);
+	Mult_Au(n1, n2, n3, D, ldd, B, x_sol, f1);
 
-	// f[N] = diag(B{N-1})*x{N-1} + D{N}*x{N};
-	DenseDiagMult(n, &B[ind(NB - 2, n)], &x_sol[ind(NB - 2, n)], &f1[ind(NB - 1, n)]);
-	dsymv("Up", &n, &done, &D[ind(NB - 1, n)], &ldd, &x_sol[ind(NB - 1, n)], &ione, &done, &f1[ind(NB - 1, n)], &ione);
-
-
-	// f{ i } = diag(B{ i - 1 })*x { i - 1 } + D{ i }*x{ i } + diag(B{ i })*x { i + 1 };
-	for (int blk = 1; blk < NB - 1; blk++)
-	{
-		//f{ i } = diag(B{ i - 1 })*x { i - 1 } + diag(B{ i })*x { i + 1 };
-		DenseDiagMult(n, &B[ind(blk - 1, n)], &x_sol[ind(blk - 1, n)], &f1[ind(blk, n)]);
-		DenseDiagMult(n, &B[ind(blk, n)], &x_sol[ind(blk + 1, n)], f_help);
-		daxpby(&n, &done, f_help, &ione, &done, &f1[ind(blk, n)], &ione);
-		//Add_dense_vect(n, done, &f1[ind(blk, n)], done, f_help, &f1[ind(blk, n)]);
-
-		// f{i} = f{i} + D{ i }*x{ i } 
-		dsymv("Up", &n, &done, &D[ind(blk, n)], &ldd, &x_sol[ind(blk, n)], &ione, &done, &f1[ind(blk, n)], &ione);
-	}
-
-#pragma omp parallel for simd
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < size; i++)
 		g[i] = f[i] - f1[i];
 
-//	print_vec(size, f, g, "f and g");
+#ifdef DEBUG
+	print_vec(size, f, g, "f and g");
+#endif
 
 	RelRes = dlange("Frob", &size, &ione, g, &size, NULL);
 	RelRes = RelRes / dlange("Frob", &size, &ione, f, &size, NULL);
@@ -857,8 +1014,8 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 									 double eps, int smallsize, char *bench)
 {
 	int n = n1 * n2;
-	int NB = n3; // size of D = NB blocks by n elements
-	int size = n * NB;
+	int nbr = n3; // size of D is equal to nbr blocks by n elements
+	int size = n * nbr;
 	double *TD1 = alloc_arr(n * n); int ldtd = n;
 	double *TD = alloc_arr(n * n);
 	double *DC = alloc_arr(size * n); int lddc = size;
@@ -885,7 +1042,7 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
 
 
-	for (int k = 1; k < NB; k++)
+	for (int k = 1; k < nbr; k++)
 	{
 		tt = omp_get_wtime();
 		SymRecCompress(n, &DC[ind(k, n)], lddc, smallsize, eps, "SVD");
@@ -925,18 +1082,18 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize)
 {
 	int n = n1 * n2;
-	int NB = n3;
-	int size = n * NB;
+	int nbr = n3;
+	int size = n * nbr;
 	double *tb = alloc_arr(size);
 	double *y = alloc_arr(n);
 
-#pragma omp parallel for simd
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < n; i++)
 		tb[i] = f[i];
 
 	//print_vec(n, &tb[ind(0, n)], &tb[ind(0, n)], "tb(0, n)");
 
-	for (int k = 1; k < NB; k++)
+	for (int k = 1; k < nbr; k++)
 	{
 		RecMultL(n, 1, &G[ind(k-1, n) + ldg * 0], ldg, &tb[ind(k - 1, n)], size, y, n, smallsize);	
 		DenseDiagMult(n, &B[ind(k - 1, n)], y, y);
@@ -946,17 +1103,14 @@ void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, dou
 			tb[ind(k, n) + i] = f[ind(k, n) + i] - y[i];
 
 	}
-	//print_vec(n, &tb[ind(NB - 1, n)], &tb[ind(NB - 1, n)], "tb(NB - 1, n)");
 
-	RecMultL(n, 1, &G[ind(NB - 1, n) + ldg * 0], ldg, &tb[ind(NB - 1, n)], size, &x[ind(NB - 1, n)], size, smallsize);
+	RecMultL(n, 1, &G[ind(nbr - 1, n) + ldg * 0], ldg, &tb[ind(nbr - 1, n)], size, &x[ind(nbr - 1, n)], size, smallsize);
 
-	//print_vec(n, &x[ind(NB - 1, n)], &x[ind(NB - 1, n)], "x[ind(NB - 1, n)]");
-
-	for (int k = NB - 2; k >= 0; k--)
+	for (int k = nbr - 2; k >= 0; k--)
 	{
 		DenseDiagMult(n, &B[ind(k, n)], &x[ind(k + 1, n)], y);
 
-#pragma omp parallel for simd
+#pragma omp parallel for simd schedule(simd:static)
 		for (int i = 0; i < n; i++)
 			y[i] = tb[ind(k, n) + i] - y[i];
 
@@ -1010,10 +1164,10 @@ void DiagMult(int n, double *A, int lda, double *d, int small_size)
 void Test_DiagMult(int n, double eps, char *method, int smallsize)
 {
 	printf("*****Test for DiagMult  n = %d ******* ", n);
-	double *Hd = new double[n*n]; // diagonal Hd = D * H * D
-	double *H1 = new double[n*n]; // compressed H
-	double *H2 = new double[n*n]; // recovered H after D * H1 * D
-	double *d = new double[n];
+	double *Hd = alloc_arr(n*n); // diagonal Hd = D * H * D
+	double *H1 = alloc_arr(n*n); // compressed H
+	double *H2 = alloc_arr(n*n); // recovered H after D * H1 * D
+	double *d = alloc_arr(n);
 	double norm = 0;
 
 	Hd[0:n*n] = 0;
@@ -1053,6 +1207,11 @@ void Test_DiagMult(int n, double eps, char *method, int smallsize)
 
 	// Compare Hd and H2
 	rel_error(n, n, H2, Hd, ldh, eps);
+
+	free_arr(&Hd); // diagonal Hd = D * H * D
+	free_arr(&H1); // compressed H
+	free_arr(&H2); // recovered H after D * H1 * D
+	free_arr(&d);
 	
 }
 
@@ -1060,6 +1219,7 @@ void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps)
 {
 	double norm;
 	// Norm of residual
+#pragma omp parallel for simd schedule(simd:static)
 	for (int j = 0; j < k; j++)
 	{
 		for (int i = 0; i < n; i++)
@@ -1199,7 +1359,8 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 #ifdef DEBUG
 		printf("Smallsize - doing dense addition for n = %d and smallsize = %d\n", n, smallsize);
 #endif
-		Add_dense(n, n, alpha, A, lda, beta, B, ldb, C, ldc);
+		mkl_domatadd('C', 'N', 'N', n, n, alpha, A, lda, beta, B, ldb, C, ldc);
+		//Add_dense(n, n, alpha, A, lda, beta, B, ldb, C, ldc);
 	}
 	else
 	{

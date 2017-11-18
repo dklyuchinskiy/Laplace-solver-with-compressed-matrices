@@ -11,10 +11,12 @@
 using namespace std;
 
 #include <time.h>
-#include "templates.h"
-
 
 #define PROBLEM 2
+
+#if (PROBLEM == 2)
+#define TEST 1
+#endif
 
 
 #define N 10
@@ -28,6 +30,18 @@ using namespace std;
 #define EPS 0.00000001
 
 #define min(a,b) ((a) <= (b)) ? (a) : (b)
+
+struct size_m {
+	int l;
+	int n;
+	double h;
+};
+
+#include "templates.h"
+
+#define PI 3.141592653589793238462643
+
+
 
 
 
