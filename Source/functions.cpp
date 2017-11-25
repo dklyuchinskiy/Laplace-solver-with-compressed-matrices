@@ -917,10 +917,8 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 	int size = n1 * n2 * n3;
 	double tt;
 	double tt1;
-	double eps = 5e-2;
-	printf("eps = %lf\n", eps);
 	tt = omp_get_wtime();
-	DirFactFastDiag(n1, n2, n3, D, ldd, B, G, ldg, eps, smallsize, bench);
+	DirFactFastDiag(n1, n2, n3, D, ldd, B, G, ldg, thresh, smallsize, bench);
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -928,7 +926,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 	}
 
 	tt = omp_get_wtime();
-	DirSolveFastDiag(n1, n2, n3, G, ldg, B, f, x_sol, eps, smallsize);
+	DirSolveFastDiag(n1, n2, n3, G, ldg, B, f, x_sol, thresh, smallsize);
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -955,7 +953,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 			while ((RelRes > thresh) && (itcount < ItRef))
 			{
 				tt = omp_get_wtime();
-				DirSolveFastDiag(n1, n2, n3, G, ldg, B, g, x1, eps, smallsize);
+				DirSolveFastDiag(n1, n2, n3, G, ldg, B, g, x1, thresh, smallsize);
 
 #pragma omp parallel for simd schedule(simd:static)
 				for (int i = 0; i < size; i++)

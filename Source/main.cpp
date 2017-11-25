@@ -69,14 +69,14 @@ int main()
 			Test_SymRecCompress(n, eps, method, smallsize);
 
 #elif (PROBLEM == 2)
-	int n1 = 39; // number of point across the directions
-	int n2 = 39;
-	int n3 = 39;
+	int n1 = 29; // number of point across the directions
+	int n2 = 29;
+	int n3 = 50;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
 	int size = n * NB; // size of vector x and f: n1 * n2 * n3
 	int smallsize = 400;
-	double thresh = 1e-4; // stop level of algorithm by relative error
+	double thresh = 1e-6; // stop level of algorithm by relative error
 	int ItRef = 200; // Maximal number of iterations in refirement
 	char bench[255] = "display"; // parameter into solver to show internal results
 	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
