@@ -79,3 +79,29 @@ void DenseDiagMult(int n, double *diag, double *v, double *f);
 double F_ex(double x, double y, double z);
 double u_ex(double x, double y, double z);
 void Mult_Au(int n1, int n2, int n3, double *D, int ldd, double *B, double *u, double *Au /*output*/);
+
+// BinaryTrees.cpp
+
+node* AllocNewNode1(int value);
+void AllocNewNode2(node* Node, int value);
+bool lookup(node *node, int value);
+node* insert1(node* root, int value);
+void insert2(node* *root, int value); // передаем дерево по указателю
+int TreeSize(node* Node);
+int MaxDepth(node* Node);
+int MinValue(node* root);
+int MaxValue(node* root);
+void PrintInorder(node* root);
+void PrintPostorder(node *root);
+bool IsBST(node *root);
+
+void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
+	double *A /* A is overwritten by U */, int lda, mnode* &Astr, double eps, char *method);
+mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
+	double *A /* A is overwritten by U */, int lda, double eps, char *method);
+void Test_LowRankApproxStruct(int m, int n, double eps, char *method);
+void SymRecCompressStruct(int n, double *A, const int lda, mnode* &ACstr, const int small_size, double eps, char *method);
+void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int small_size);
+void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize);
+void DiagMultStruct(int n, mnode* Astr, double *d, int small_size);
+void Test_DiagMultStruct(int n, double eps, char *method, int smallsize);

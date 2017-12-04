@@ -1,4 +1,5 @@
 #include "Header.h"
+#include "templates.h"
 
 // all source files should contain templates of functions
 
@@ -59,14 +60,17 @@ int main()
 	free(ipiv_mat);
 
 #elif (PROBLEM == 1)
-	int n = 10;
+	int n = 6;
 	double eps = 1e-2;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
 	for (int n = 3; n <= 10; n++)
 		for(double eps = 1e-2; eps > 1e-8; eps /= 10)
-			Test_SymRecCompress(n, eps, method, smallsize);
+		Test_SymRecCompress(n, eps, method, smallsize);
+	for (int n = 3; n <= 10; n++)
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_SymRecCompressStruct(n, eps, method, smallsize);
 
 #elif (PROBLEM == 2)
 	int n1 = 29; // number of point across the directions
@@ -169,8 +173,8 @@ int main()
 	free_arr(&f);
 
 #elif (PROBLEM == 3)
-	int n = 10;
-	double eps = 1e-8;
+	int n = 6;
+	double eps = 1e-2;
 	char method[255] = "SVD";
 	int smallsize = 3;
 
@@ -178,6 +182,10 @@ int main()
 	for (int n = 3; n <= 10; n++)
 		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 			Test_DiagMult(n, eps, method, smallsize);
+	printf("--------------------Structure-------------\n");
+	for (int n = 3; n <= 10; n++)
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_DiagMultStruct(n, eps, method, smallsize);
 
 #elif (PROBLEM == 4)
 ///	int n = 5;
@@ -198,9 +206,15 @@ int main()
 	char method[255] = "SVD";
 
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		for (int n = 3; n <= 10; n++)
+		for (int m = 3; m <= 10; m++)
 			for (int n = 1; n <= 10; n++)
 				Test_LowRankApprox(m, n, eps, method);
+
+	cout << "----------------Structured approach---------------\n" << endl;
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int m = 3; m <= 10; m++)
+			for (int n = 1; n <= 10; n++)
+				Test_LowRankApproxStruct(m, n, eps, method);
 
 #elif (PROBLEM == 6)
 	int n = 5;
@@ -250,6 +264,43 @@ int main()
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 			Test_SymCompRecInv(n, smallsize, eps, method);
+#elif (PROBLEM == 10)
+	
+	node *root1 = NULL;
+	node *root2 = NULL;
+
+	root1 = insert1(root1, 5);
+	root2 = insert1(root2, 5);
+	insert2(&root2, 7);
+	insert2(&root2, 3);
+	insert2(&root2, 2);
+	insert2(&root2, 8);
+	insert2(&root2, 4);
+	insert2(&root2, 1);
+	insert2(&root2, 6);
+	insert2(&root2, 9);
+
+//	cout << "val1 = " << root1->val << endl;
+	cout << "val2 = " << root2->val << endl;
+
+	printf("size = %d\n", TreeSize(root2));
+	printf("maxDepth = %d\n", MaxDepth(root2));
+	printf("minValue = %d\n", MinValue(root2));
+	printf("maxValue = %d\n", MaxValue(root2));
+	PrintInorder(root2);
+	printf("\n");
+	PrintPostorder(root2);
+	printf("\n");
+	printf("IsBST = %d\n", IsBST(root2));
+
+
+/*
+//	bool is_node;
+	is_node = lookup(root2, 3);
+	cout << is_node << endl;
+	is_node = lookup(root2, 5);
+	cout << is_node << endl;*/
+
 
 #endif
 	system("pause");

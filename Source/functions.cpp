@@ -460,6 +460,7 @@ void Test_LowRankApprox(int m, int n, double eps, char *method)
 
 	p = 0;
 	LowRankApprox(m, n, A, lda, V, ldv, p, eps, "SVD");
+	printf(" p = %d ", p);
 
 	dgemm("no", "no", &m, &n, &p, &alpha, A, &lda, V, &ldv, &beta, A_rec, &lda);
 
@@ -531,7 +532,6 @@ void SymResRestore(int n, double *H1 /* compressed */, double *H2 /* recovered *
 void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 {
 	printf("*****Test for SymRecCompress  n = %d eps = %e ******* ", n, eps);
-	int small_size = 3;
 	char frob = 'F';
 	double norm = 0;
 
@@ -553,8 +553,8 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 #ifdef DEBUG
 	print(n, n, H1, ldh, "H1");
 #endif
-	SymRecCompress(n, H1, ldh, small_size, eps, "SVD");
-	SymResRestore(n, H1, H2, ldh, small_size);
+	SymRecCompress(n, H1, ldh, smallsize, eps, "SVD");
+	SymResRestore(n, H1, H2, ldh, smallsize);
 
 #ifdef DEBUG
 	print(n, n, H1, ldh, "H1 compressed");

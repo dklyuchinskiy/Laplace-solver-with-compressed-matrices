@@ -12,7 +12,7 @@ using namespace std;
 
 #include <time.h>
 
-#define PROBLEM 2
+#define PROBLEM 3
 
 #if (PROBLEM == 2)
 #define TEST 1
@@ -20,6 +20,8 @@ using namespace std;
 
 
 #define N 10
+
+//#define DEBUG
 
 #if (PROBLEM == 5)
 //#define DEBUG
@@ -36,6 +38,26 @@ struct size_m {
 	int n;
 	double h;
 };
+
+struct BinaryTreeNode {
+	int val;
+	struct BinaryTreeNode *left;
+	struct BinaryTreeNode *right;
+};
+
+typedef struct BinaryTreeNode node;
+
+struct BinaryMatrixTreeNode {
+
+	int p;
+	double *U = NULL;
+	double *VT = NULL;
+	double *A = NULL;
+	struct BinaryMatrixTreeNode *left;
+	struct BinaryMatrixTreeNode *right;
+};
+
+typedef struct BinaryMatrixTreeNode mnode;
 
 #include "templates.h"
 
