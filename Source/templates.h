@@ -105,3 +105,10 @@ void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ld
 void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize);
 void DiagMultStruct(int n, mnode* Astr, double *d, int small_size);
 void Test_DiagMultStruct(int n, double eps, char *method, int smallsize);
+void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize);
+void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, int ldy, int smallsize);
+void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps, char *method);
+void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method);
+void alloc_dense_node(int n, mnode* &Cstr);
+void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, int ldy, double *V, int ldv, mnode* &Bstr, int smallsize, double eps, char* method);
+void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method);

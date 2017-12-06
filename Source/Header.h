@@ -12,7 +12,7 @@ using namespace std;
 
 #include <time.h>
 
-#define PROBLEM 3
+#define PROBLEM 8
 
 #if (PROBLEM == 2)
 #define TEST 1
@@ -23,7 +23,7 @@ using namespace std;
 
 //#define DEBUG
 
-#if (PROBLEM == 5)
+#if (PROBLEM == 6)
 //#define DEBUG
 #endif
 

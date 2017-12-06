@@ -182,6 +182,7 @@ int main()
 	for (int n = 3; n <= 10; n++)
 		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 			Test_DiagMult(n, eps, method, smallsize);
+
 	printf("--------------------Structure-------------\n");
 	for (int n = 3; n <= 10; n++)
 		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
@@ -198,7 +199,13 @@ int main()
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 			for (int k = 1; k <= 10; k++)
-			Test_RecMultL(n, k, eps, method, smallsize);
+				Test_RecMultL(n, k, eps, method, smallsize);
+
+	printf("--------------------Structure-------------\n");
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int k = 1; k <= 10; k++)
+				Test_RecMultLStruct(n, k, eps, method, smallsize);
 #elif (PROBLEM == 5)
 	int m = 8;
 	int n = 10;
@@ -217,8 +224,8 @@ int main()
 				Test_LowRankApproxStruct(m, n, eps, method);
 
 #elif (PROBLEM == 6)
-	int n = 5;
-	double eps = 1e-4;
+	int n = 7;
+	double eps = 1e-2;
 	char method[255] = "SVD";
 	int smallsize = 3;
 	double alpha = 1.0;
@@ -227,6 +234,10 @@ int main()
 	for (int n = 3; n <= 10; n++)
 		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 			Test_Add(n, alpha, beta, smallsize, eps, method);
+	printf("-----------------Structure----------------\n");
+	for (int n = 3; n <= 10; n++)
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+			Test_AddStruct(n, alpha, beta, smallsize, eps, method);
 
 #elif (PROBLEM == 7)
 	int m = 3;
@@ -253,6 +264,12 @@ int main()
 		for (int n = 3; n <= 10; n++)
 			for (int k = 1; k <= 10; k++)
 				Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
+
+	printf("----------------Structure----------------\n");
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int k = 1; k <= 10; k++)
+				Test_SymCompUpdate2Struct(n, k, alpha, smallsize, eps, method);
 
 #elif (PROBLEM == 9) // test for inversion of compressed matrix
 
