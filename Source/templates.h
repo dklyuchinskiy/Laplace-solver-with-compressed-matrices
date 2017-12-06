@@ -112,3 +112,5 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 void alloc_dense_node(int n, mnode* &Cstr);
 void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, int ldy, double *V, int ldv, mnode* &Bstr, int smallsize, double eps, char* method);
 void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method);
+void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method);
+void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method);

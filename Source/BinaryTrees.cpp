@@ -1011,5 +1011,135 @@ void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double
 	free_arr(&V);
 }
 
+void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method)
+{
+	double alpha_one = 1.0;
+	double alpha_mone = -1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+	int info = 0;
+	double wquery = 0;
+	int lwork = -1;
+
+	Bstr = (mnode*)malloc(sizeof(mnode));
+
+	if (n <= smallsize)
+	{
+		int *ipiv = (int*)malloc(n * sizeof(int));
+
+		// LU factorization of A
+		dgetrf(&n, &n, Astr->A, &n, ipiv, &info);
+
+		// space query
+		dgetri(&n, Astr->A, &n, ipiv, &wquery, &lwork, &info);
+
+		lwork = (int)wquery;
+		double *work = alloc_arr(lwork);
+
+		// inversion of A
+		dgetri(&n, Astr->A, &n, ipiv, work, &lwork, &info);
+
+		// dlacpy
+		alloc_dense_node(n, Bstr);
+		dlacpy("All", &n, &n, Astr->A, &n, Bstr->A, &n);
+
+		free_arr(&work);
+		free(ipiv);
+	}
+	else
+	{
+		int n2 = (int)ceil(n / 2.0); // n2 > n1
+		int n1 = n - n2;
+
+		Bstr->p = Astr->p;
+		double *X11 = alloc_arr(n1 * n1); int ldx11 = n1;
+		double *X22 = alloc_arr(n2 * n2); int ldx22 = n2;
+		double *V = alloc_arr(n1 * Astr->p); int ldv = n1;
+		double *B12 = alloc_arr(n1 * Bstr->p); int ldb12 = n1;
+		double *Y = alloc_arr(Astr->p * Bstr->p); int ldy = Astr->p;
+		mnode *X11str, *X22str;
+
+		// Inversion of A22 to X22
+		SymCompRecInvStruct(n2, Astr->right, X22str, smallsize, eps, method);
+
+		// Save X22 * U to B{2,1}
+		Bstr->U = alloc_arr(n2 * Bstr->p);
+		RecMultLStruct(n2, Bstr->p, X22str, Astr->U, n2, Bstr->U, n2, smallsize);
+
+		// Compute Y = UT * X22 * U = | A[2,1]T * B{2,1} | = | (p x n2) x (n2 x p)  = (p x p) |
+		dgemm("Trans", "No", &Astr->p, &Bstr->p, &n2, &alpha_one, Astr->U, &n2, Bstr->U, &n2, &beta_zero, Y, &ldy);
+
+		// Update X11 = A11 - V * UT * X22 * U * VT = | A11 - V * Y * VT | = | (n1 x n1) - (n1 x p) * (p x p) * (p x n1) |
+		Mat_Trans(Astr->p, n1, Astr->VT, Astr->p, V, ldv);
+		SymCompUpdate2Struct(n1, Astr->p, Astr->left, alpha_mone, Y, ldy, V, ldv, X11str, smallsize, eps, method);
+
+		// Inversion of X11 to B11
+		SymCompRecInvStruct(n1, X11str, Bstr->left, smallsize, eps, method);
+
+		// Fill B{1,2} as B12 = -B{1,1} * A{1,2} = -X11 * V = (n1 x n1) * (n1 x p) = (n1 x p)
+		RecMultLStruct(n1, Bstr->p, Bstr->left, V, ldv, B12, ldb12, smallsize);
+		mkl_dimatcopy('C', 'N', n1, Bstr->p, -1.0, B12, ldb12, ldb12);
+
+		// B{1,2} = transpose(B12)
+		Bstr->VT = alloc_arr(Bstr->p *n1);
+		Mat_Trans(n1, Bstr->p, B12, ldb12, Bstr->VT, Bstr->p);
+
+		// Y = -(A{1,2})' * B{1,2} = -VT * (-X11 * V) = - VT * B12 = (p x n1) * (n1 x p)
+		dgemm("No", "No", &Astr->p, &Bstr->p, &n1, &alpha_mone, Astr->VT, &Astr->p, B12, &ldb12, &beta_zero, Y, &ldy);
+
+		// Update X22 + (X22*U) * VT * X11 * V (UT * X22) = X22 + B21 * Y * B21T = (n2 x n2) + (n2 x p) * (p x p) * (p x n2)
+		SymCompUpdate2Struct(n2, Bstr->p, X22str, alpha_one, Y, ldy, Bstr->U, n2, Bstr->right, smallsize, eps, method);
+
+		free_arr(&X11);
+		free_arr(&X22);
+		free_arr(&Y);
+		free_arr(&V);
+		free_arr(&B12);
+	}
+}
+
+void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
+{
+	printf("***** Test_SymCompRecInvStruct n = %d eps = %lf **** ", n, eps);
+	double *H = alloc_arr(n * n);
+	double *Hc = alloc_arr(n * n);
+	double *Bc = alloc_arr(n * n);
+	double *Brec = alloc_arr(n * n);
+	double *Y = alloc_arr(n * n);
+
+	int ldh = n;
+	int ldb = n;
+	int ldy = n;
+
+	double alpha_mone = -1.0;
+	double beta_one = 1.0;
+
+	Hilbert(n, H, ldh);
+	Hilbert(n, Hc, ldh);
+
+	// for stability
+	for (int i = 0; i < n; i++)
+	{
+		H[i + ldh * i] += 1.0;
+		Hc[i + ldh * i] += 1.0;
+	}
+
+	mnode *HCstr, *BCstr;
+	SymRecCompressStruct(n, Hc, ldh, HCstr, smallsize, eps, method);
+	SymCompRecInvStruct(n, HCstr, BCstr, smallsize, eps, method);
+	SymResRestoreStruct(n, BCstr, Brec, ldb, smallsize);
+
+	Eye(n, Y, ldy);
+
+	// Y = Y - H * Brec
+	dgemm("No", "No", &n, &n, &n, &alpha_mone, H, &ldh, Brec, &ldb, &beta_one, Y, &ldy);
+
+	double norm = dlange("Frob", &n, &n, Y, &ldy, NULL);
+
+	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
+
+}
+
 
 

@@ -281,6 +281,12 @@ int main()
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 			Test_SymCompRecInv(n, smallsize, eps, method);
+
+	printf("----------------------Structure---------------\n");
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			Test_SymCompRecInvStruct(n, smallsize, eps, method);
+
 #elif (PROBLEM == 10)
 	
 	node *root1 = NULL;
