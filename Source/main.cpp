@@ -73,9 +73,9 @@ int main()
 			Test_SymRecCompressStruct(n, eps, method, smallsize);
 
 #elif (PROBLEM == 2)
-	int n1 = 29; // number of point across the directions
-	int n2 = 29;
-	int n3 = 50;
+	int n1 = 39; // number of point across the directions
+	int n2 = 39;
+	int n3 = 39;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
 	int size = n * NB; // size of vector x and f: n1 * n2 * n3
@@ -153,8 +153,9 @@ int main()
 	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
 
 	// Calling the solver
-	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
-
+//	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
+	mnode **Gstr;
+	Block3DSPDSolveFastStruct(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, Gstr, x_sol, success, RelRes, itcount);
 	printf("success=%d, itcount=%d\n", success, itcount);
 	printf("-----------------------------------\n");
 
@@ -288,6 +289,16 @@ int main()
 			Test_SymCompRecInvStruct(n, smallsize, eps, method);
 
 #elif (PROBLEM == 10)
+	int n = 5;
+	double eps = 1e-06;
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			Test_CopyStruct(n, eps, method, smallsize);
+
+#elif (PROBLEM == 11)
 	
 	node *root1 = NULL;
 	node *root2 = NULL;

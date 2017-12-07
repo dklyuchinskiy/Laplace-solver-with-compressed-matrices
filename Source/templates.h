@@ -114,3 +114,11 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method);
 void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method);
 void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method);
+void CopyStruct(int n, mnode* Gstr, mnode* &TD1str, int smallsize);
+void Test_CopyStruct(int n, double eps, char *method, int smallsize);
+void DirSolveFastDiagStruct(int n1, int n2, int n3, mnode* *Gstr, double *B, double *f, double *x, double eps, int smallsize);
+void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B, mnode** &Gstr,
+	double eps, int smallsize, char *bench);
+void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
+	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount);
+void FreeNodes(int n, mnode* &Astr, int smallsize);

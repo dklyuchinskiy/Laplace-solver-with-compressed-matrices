@@ -915,8 +915,12 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 			/* output */ double *G, int ldg, double *x_sol, int &success, double &RelRes, int &itcount)
 {
 	int size = n1 * n2 * n3;
+	int n = n1 * n2;
 	double tt;
 	double tt1;
+	double *DI = alloc_arr(size * n); int lddi = size;
+	dlacpy("All", &size, &n, D, &ldd, DI, &lddi);
+
 	tt = omp_get_wtime();
 	DirFactFastDiag(n1, n2, n3, D, ldd, B, G, ldg, thresh, smallsize, bench);
 	tt = omp_get_wtime() - tt;
@@ -936,7 +940,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 	double *g = alloc_arr(size);
 	double *x1 = alloc_arr(size);
 	RelRes = 1;
-	Resid(n1, n2, n3, D, ldd, B, x_sol, f, g, RelRes);
+	Resid(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes);
 
 	printf("RelRes = %lf\n", RelRes);
 	if (RelRes < thresh)
@@ -959,7 +963,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 				for (int i = 0; i < size; i++)
 					x_sol[i] = x_sol[i] + x1[i];
 
-				Resid(n1, n2, n3, D, ldd, B, x_sol, f, g, RelRes); // начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2, где
+				Resid(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes); // начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2, где
 				itcount = itcount + 1;
 				tt = omp_get_wtime() - tt;
 				if (compare_str(7, bench, "display")) printf("itcount=%d, RelRes=%lf, Time=%lf\n", itcount, RelRes, tt);
@@ -971,6 +975,7 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 		}
 	}
 
+	free_arr(&DI);
 	free_arr(&g);
 	free_arr(&x1);
 }
@@ -1016,10 +1021,6 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 	int size = n * nbr;
 	double *TD1 = alloc_arr(n * n); int ldtd = n;
 	double *TD = alloc_arr(n * n);
-	double *DC = alloc_arr(size * n); int lddc = size;
-
-	dlacpy("All", &size, &n, D, &ldd, DC, &lddc);
-	
 
 	if (compare_str(7, bench, "display"))
 	{
@@ -1029,13 +1030,13 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 	}
 
 	double tt = omp_get_wtime();
-	SymRecCompress(n, &DC[ind(0, n)], lddc, smallsize, eps, "SVD");
+	SymRecCompress(n, &D[ind(0, n)], ldd, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
 
 	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
 
 	tt = omp_get_wtime();
-	SymCompRecInv(n, &DC[ind(0, n)], lddc, &G[ind(0, n)], ldg, smallsize, eps, "SVD");
+	SymCompRecInv(n, &D[ind(0, n)], ldd, &G[ind(0, n)], ldg, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
 
@@ -1043,7 +1044,7 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 	for (int k = 1; k < nbr; k++)
 	{
 		tt = omp_get_wtime();
-		SymRecCompress(n, &DC[ind(k, n)], lddc, smallsize, eps, "SVD");
+		SymRecCompress(n, &D[ind(k, n)], ldd, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Compressing D(%d) time: %lf\n", k, tt);
 
@@ -1054,7 +1055,7 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf\n", k, tt);
 
 		tt = omp_get_wtime();
-		Add(n, 1.0, &DC[ind(k, n)], lddc, -1.0, TD1, ldtd, TD, ldtd, smallsize, eps, "SVD");
+		Add(n, 1.0, &D[ind(k, n)], ldd, -1.0, TD1, ldtd, TD, ldtd, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Add %d time: %lf\n", k, tt);
 
@@ -1072,7 +1073,6 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 		printf("****************************\n");
 	}
 
-	free_arr(&DC);
 	free_arr(&TD);
 	free_arr(&TD1);
 }
@@ -1089,11 +1089,9 @@ void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, dou
 	for (int i = 0; i < n; i++)
 		tb[i] = f[i];
 
-	//print_vec(n, &tb[ind(0, n)], &tb[ind(0, n)], "tb(0, n)");
-
 	for (int k = 1; k < nbr; k++)
 	{
-		RecMultL(n, 1, &G[ind(k-1, n) + ldg * 0], ldg, &tb[ind(k - 1, n)], size, y, n, smallsize);	
+		RecMultL(n, 1, &G[ind(k - 1, n) + ldg * 0], ldg, &tb[ind(k - 1, n)], size, y, n, smallsize);	
 		DenseDiagMult(n, &B[ind(k - 1, n)], y, y);
 
 #pragma omp parallel for simd schedule(simd:static)
@@ -1229,8 +1227,8 @@ void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps)
 
 	norm = dlange("Frob", &n, &k, Hrec, &ldh, NULL);
 	norm = norm / dlange("Frob", &n, &k, Hinit, &ldh, NULL);
-	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
-	else printf("Norm %10.8lf > eps %10.8lf : FAILED\n", norm, eps);
+	if (norm < eps) printf("Norm %12.10e < eps %12.10lf: PASSED\n", norm, eps);
+	else printf("Norm %12.10lf > eps %12.10lf : FAILED\n", norm, eps);
 }
 
 /* Y = A * X, where A - compressed n * n, X - dense n * m, Y - dense n * m */
@@ -1664,7 +1662,7 @@ void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, 
 	free_arr(&V);
 }
 
-// Рекурсивное обращение сжатой матрицы
+// Recursuve inversion of compressed matrix A to the compressed matrix B
 void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize, double eps, char *method)
 {
 	double alpha_one = 1.0;
