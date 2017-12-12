@@ -234,7 +234,9 @@ mnode* AllocNewMatrixNode(int n1, int n2)
 	return Node;
 }
 #endif
-// Low Rank approximation
+
+// ---------------HSS technology----------
+
 void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 	double *A /* A is overwritten by U */, int lda, mnode* &Astr, double eps, char *method)
 {
@@ -404,6 +406,7 @@ void SymRecCompressStruct(int n /* order of A */, double *A /* init matrix */, c
 
 		// LowRank A21
 		LowRankApproxStruct(n2, n1, &A[n1 + lda * 0], lda, ACstr, eps, method);
+
 #ifdef DEBUG
 		printf("SymRecCompressStruct: n = %d n1 = %d n2 = %d p = %d\n", n, n1, n2, ACstr->p);
 		print(n1, n1, &A[0 + lda * 0], lda, "Astr");
@@ -464,9 +467,11 @@ void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
 			H[i + ldh * j] = 1.0 / (i + j + 1);
 			H1[i + ldh * j] = 1.0 / (i + j + 1);
 		}
+
 #ifdef DEBUG
 	print(n, n, H1, ldh, "H1");
 #endif
+
 	mnode *H1str; // pointer to the tree head
 	SymRecCompressStruct(n, H1, ldh, H1str, smallsize, eps, "SVD"); // recursive function means recursive allocation of memory for structure fields
 	SymResRestoreStruct(n, H1str, H2, ldh, smallsize);
@@ -713,15 +718,10 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 	double beta_loc = 0.0;
 	
 	Cstr = (mnode*)malloc(sizeof(mnode));
-#ifdef DEBUG
-	printf("******Function: Add*******\n");
-#endif
+
 	// n - order of A, B and C
 	if (n <= smallsize)
 	{
-#ifdef DEBUG
-		printf("Smallsize - doing dense addition for n = %d and smallsize = %d\n", n, smallsize);
-#endif
 		alloc_dense_node(n, Cstr);
 		mkl_domatadd('C', 'N', 'N', n, n, alpha, Astr->A, n, beta, Bstr->A, n, Cstr->A, n);
 		//Add_dense(n, n, alpha, A, lda, beta, B, ldb, C, ldc);
@@ -808,10 +808,12 @@ void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps,
 			H1c[i + ldh * j] = 1.0 / (i + j + 1);
 			H2c[i + ldh * j] = 1.0 / (i*i + j*j + 1);
 		}
+
 #ifdef DEBUG
 	print(n, n, H1, ldh, "H1");
 	print(n, n, H2, ldh, "H2");
 #endif
+
 	mnode *H1str, *H2str;
 	SymRecCompressStruct(n, H1c, ldh, H1str, smallsize, eps, method);
 	SymRecCompressStruct(n, H2c, ldh, H2str, smallsize, eps, method);
@@ -820,6 +822,7 @@ void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps,
 	print(n, n, H1c, ldh, "H1c");
 	print(n, n, H2c, ldh, "H2c");
 #endif
+
 	mnode *Gstr;
 	Add_dense(n, n, alpha, H1, ldh, beta, H2, ldh, G, ldg);
 	AddStruct(n, alpha, H1str, beta, H2str, Gstr, smallsize, eps, method);
@@ -998,6 +1001,7 @@ void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double
 	print(n, n, B_rec, ldb, "B_rec");
 	print(n, n, H, ldh, "H");
 #endif
+
 	// || B_rec - H || / || H ||
 	rel_error(n, n, B_rec, H, ldh, eps);
 
