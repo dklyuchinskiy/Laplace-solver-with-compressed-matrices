@@ -25,7 +25,7 @@ void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, doub
 void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize);
 
 void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
-	/* output */ double *D, int ldd, double *B, double *x1, double *f);
+	/* output */ double *D, int ldd, double *B, double *x1, double *f, double thresh);
 
 
 
@@ -62,19 +62,27 @@ void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr);
 void Hilbert(int n, double *H, int ldh);
 void op_mat(int n1, int n, double *Y11, double *Y12, int ldy, char sign);
 void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, double *B, int ldb, double *C, int ldc);
-void print_vec(int size, double *vec1, double *vec2, char *name);
 void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps);
 void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x, double *f, double *g, double &RelRes);
 void print_map(const map<vector<int>, double>& SD);
 void Eye(int n, double *H, int ldh);
+void Diag(int n, double *H, int ldh, double value);
 void Add_dense_vect(int n, double alpha, double *a, double beta, double *b, double *c);
 void GenSolVector(int size, double *x1);
 void DenseDiagMult(int n, double *diag, double *v, double *f);
 void Mult_Au(int n1, int n2, int n3, double *D, int ldd, double *B, double *u, double *Au /*output*/);
+void print(int m, int n, double *u, int ldu, char *mess);
+void print_vec_mat(int m, int n, double *u, int ldu, double *vec, char *mess);
+void print_vec(int size, double *vec1, double *vec2, char *name);
+void print_vec(int size, int *vec1, double *vec2, char *name);
 
 int compare_str(int n, char *s1, char *s2);
 int ind(int j, int n);
 map<vector<int>, double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);
+map<vector<int>, double> dense_to_CSR(int m, int n, double *A, int lda, int *ia, int *ja, double *values);
+map<vector<int>, double> block3diag_to_CSR(int n1, int n2, int blocks, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
+map<vector<int>, double> concat_maps(const map<vector<int>, double>& map1, const map<vector<int>, double>& map2);
+void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda, double *BR, int ldbr, double* AR, int ldar);
 
 // BinaryTrees.cpp
 
@@ -110,7 +118,15 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 void DirSolveFastDiagStruct(int n1, int n2, int n3, mnode* *Gstr, double *B, double *f, double *x, double eps, int smallsize);
 void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B, mnode** &Gstr,
 	double eps, int smallsize, char *bench);
-void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
+void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, double *B, double thresh, int smallsize, char *bench);
+void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount);
+void ResidCSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_sol, double *f, double* g, double &RelRes);
+void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps);
+void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh);
+void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
+void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, double *DD, int lddd);
+void GenRHSandSolution(size_m x, size_m y, size_m z, double *u, double *f);
+
 
 

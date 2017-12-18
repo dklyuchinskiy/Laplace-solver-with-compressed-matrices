@@ -205,6 +205,8 @@ bool IsBST(node *root)
 	if (!IsBST(root->left) || !IsBST(root->right))
 		return false;
 
+	return true;
+
 }
 #if 0
 // ---------- Compressed matrices --------------
@@ -1222,7 +1224,101 @@ void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B
 	free(DCstr);
 
 }
+#if 1
+/* ‘ункци€ вычислени€ разложени€ симметричной блочно-диагональной матрицы с использование сжатого формата.
+¬недиагональные блоки предполагаютс€ диагональными матрицами */
+void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, double *B,
+	double eps, int smallsize, char *bench)
+{
+	int n = x. n * y.n;
+	int nbr = z.n; // size of D is equal to nbr blocks by n elements
+	int size = n * nbr;
+	double *DD = alloc_arr(n * n); int lddd = n;
 
+	// Set vector B
+#pragma omp parallel for schedule(dynamic)
+	for (int j = 0; j < z.n - 1; j++)
+		for (int i = 0; i < n; i++)
+			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
+
+	
+
+	if (compare_str(7, bench, "display"))
+	{
+		printf("**********************************\n");
+		printf("Timing DirFactFastDiagStructOnline\n");
+		printf("**********************************\n");
+	}
+
+	double tt = omp_get_wtime();
+	mnode* *DCstr = (mnode**)malloc(z.n * sizeof(mnode*));
+	GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
+	printf("constructrd\n");
+	SymRecCompressStruct(n, DD, lddd, DCstr[0], smallsize, eps, "SVD");
+	tt = omp_get_wtime() - tt;
+
+	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
+
+	tt = omp_get_wtime();
+
+	Gstr = (mnode**)malloc(z.n * sizeof(mnode*));
+	SymCompRecInvStruct(n, DCstr[0], Gstr[0], smallsize, eps, "SVD");
+	tt = omp_get_wtime() - tt;
+	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
+
+
+	for (int k = 1; k < nbr; k++)
+	{
+		double *DD = alloc_arr(n * n); int lddd = n;
+		mnode *TDstr, *TD1str;
+		tt = omp_get_wtime();
+		GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
+		SymRecCompressStruct(n, DD, lddd, DCstr[k], smallsize, eps, "SVD");
+		tt = omp_get_wtime() - tt;
+		if (compare_str(7, bench, "display")) printf("Compressing D(%d) time: %lf\n", k, tt);
+
+		tt = omp_get_wtime();
+		CopyStruct(n, Gstr[k - 1], TD1str, smallsize);
+
+		DiagMultStruct(n, TD1str, &B[ind(k - 1, n)], smallsize);
+		tt = omp_get_wtime() - tt;
+		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf\n", k, tt);
+
+		tt = omp_get_wtime();
+		AddStruct(n, 1.0, DCstr[k], -1.0, TD1str, TDstr, smallsize, eps, "SVD");
+		tt = omp_get_wtime() - tt;
+		if (compare_str(7, bench, "display")) printf("Add %d time: %lf\n", k, tt);
+
+		tt = omp_get_wtime();
+		SymCompRecInvStruct(n, TDstr, Gstr[k], smallsize, eps, "SVD");
+		tt = omp_get_wtime() - tt;
+		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf\n", k, tt);
+		if (compare_str(7, bench, "display")) printf("\n");
+
+		FreeNodes(n, TDstr, smallsize);
+		FreeNodes(n, TD1str, smallsize);
+		free(DD);
+	}
+
+	if (compare_str(7, bench, "display"))
+	{
+		printf("****************************\n");
+		printf("End of DirFactFastDiag\n");
+		printf("****************************\n");
+	}
+
+
+	for (int i = z.n - 1; i >= 0; i--)
+	{
+		FreeNodes(n, DCstr[i], smallsize);
+	}
+
+	free(DCstr);
+	free(DD);
+	free(B);
+
+}
+#endif
 void DirSolveFastDiagStruct(int n1, int n2, int n3, mnode* *Gstr, double *B, double *f, double *x, double eps, int smallsize)
 {
 	int n = n1 * n2;
@@ -1309,19 +1405,88 @@ void FreeNodes(int n, mnode* &Astr, int smallsize)
 	free(Astr);
 }
 
-void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
+void ResidCSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_sol, double *f, double* g, double &RelRes)
+{
+	int n = n1 * n2;
+	int size = n * n3;
+	double *f1 = alloc_arr(size);
+	int ione = 1;
+
+	
+	mkl_dcsrgemv("No", &size, Dcsr->values, Dcsr->ia, Dcsr->ja, x_sol, f1);
+
+#pragma omp parallel for simd schedule(simd:static)
+	for (int i = 0; i < size; i++)
+		g[i] = f[i] - f1[i];
+
+#ifdef DEBUG
+	print_vec(size, f, g, "f and g");
+#endif
+
+	RelRes = dlange("Frob", &size, &ione, g, &size, NULL);
+	RelRes = RelRes / dlange("Frob", &size, &ione, f, &size, NULL);
+
+	free_arr(&f1);
+}
+
+void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps)
+{
+	int n = n1 * n2;
+	int size = n * n3;
+	double RelRes = 0;
+	double *g = alloc_arr(size);
+	ResidCSR(n1, n2, n3, Dcsr, x_orig, f, g, RelRes);
+
+	if (RelRes < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", RelRes, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", RelRes, eps);
+
+	free(g);
+}
+void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh)
+{
+	int n = n1 * n2;
+	int size = n * n3;
+	double RelRes = 0;
+	double *g = alloc_arr(size);
+	double *f1 = alloc_arr(size);
+	double *f2 = alloc_arr(size);
+	double Res1 = 0;
+	double Res2 = 0;
+
+	for (int i = 0; i < size; i++)
+	{
+		double *x_test = alloc_arr(size);
+		x_test[i] = 1;
+		Mult_Au(n1, n2, n3, D, ldd, B, x_test, f1);
+		mkl_dcsrgemv("No", &size, Dcsr->values, Dcsr->ia, Dcsr->ja, x_test, f2);
+	//	print_vec(size, f1, f2, "f1 and f2");
+		rel_error(size, 1, f1, f2, size, thresh);
+		free(x_test);
+	}
+
+}
+
+void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount)
 {
-	int size = n1 * n2 * n3;
-	int n = n1 * n2;
+	int size = x.n * y.n * z.n;
+	int n = x.n * y.n;
 	double tt;
 	double tt1;
+#ifndef CSR_FORMAT
 	double *DI = alloc_arr(size * n); int lddi = size;
-	dlacpy("All", &size, &n, D, &ldd, DI, &lddi);
-
+	double *BI = alloc_arr(size - n); // vector of diagonal elementes
+	double *x_orig = alloc_arr(size);
+	GenMatrixandRHSandSolution2(x, y, z, DI, ldd, BI, x_orig, f, thresh);
+//	dlacpy("All", &size, &n, D, &ldd, DI, &lddi);
+#endif
 
 	tt = omp_get_wtime();
-	DirFactFastDiagStruct(n1, n2, n3, D, ldd, B, Gstr, thresh, smallsize, bench);
+#ifndef ONLINE
+	DirFactFastDiagStruct(x.n, y.n, z.n, D, ldd, B, Gstr, thresh, smallsize, bench);
+#else
+	DirFactFastDiagStructOnline(x, y, z, Gstr, B, thresh, smallsize, bench);
+#endif
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -1329,7 +1494,7 @@ void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, doubl
 	}
 
 	tt = omp_get_wtime();
-	DirSolveFastDiagStruct(n1, n2, n3, Gstr, B, f, x_sol, thresh, smallsize);
+	DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, BI, f, x_sol, thresh, smallsize);
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -1339,7 +1504,11 @@ void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, doubl
 	double *g = alloc_arr(size);
 	double *x1 = alloc_arr(size);
 	RelRes = 1;
-	Resid(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes);
+#ifndef CSR_FORMAT
+	Resid(x.n, y.n, z.n, DI, lddi, BI, x_sol, f, g, RelRes);
+#else
+	ResidCSR(x.n, y.n, z.n, Dcsr, x_sol, f, g, RelRes);
+#endif
 
 	printf("RelRes = %lf\n", RelRes);
 	if (RelRes < thresh)
@@ -1356,13 +1525,18 @@ void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, doubl
 			while ((RelRes > thresh) && (itcount < ItRef))
 			{
 				tt = omp_get_wtime();
-				DirSolveFastDiagStruct(n1, n2, n3, Gstr, B, g, x1, thresh, smallsize);
+				DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, BI, g, x1, thresh, smallsize);
 
 #pragma omp parallel for simd schedule(simd:static)
 				for (int i = 0; i < size; i++)
 					x_sol[i] = x_sol[i] + x1[i];
 
-				Resid(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes); // начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2, где
+				// начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2
+#ifndef CSR_FORMAT
+				Resid(x.n, y.n, z.n, DI, lddi, BI, x_sol, f, g, RelRes);
+#else
+				ResidCSR(x.n, y.n, z.n, Dcsr, x_sol, f, g, RelRes);
+#endif
 				itcount = itcount + 1;
 				tt = omp_get_wtime() - tt;
 				if (compare_str(7, bench, "display")) printf("itcount=%d, RelRes=%lf, Time=%lf\n", itcount, RelRes, tt);
@@ -1374,13 +1548,15 @@ void Block3DSPDSolveFastStruct(int n1, int n2, int n3, double *D, int ldd, doubl
 		}
 	}
 
-	for (int i = n3 - 1; i >= 0; i--)
+	for (int i = z.n - 1; i >= 0; i--)
 	{
 		FreeNodes(n, Gstr[i], smallsize);
 	}
 
 	free(Gstr);
+#ifndef CSR_FORMAT
 	free_arr(&DI);
+#endif
 	free_arr(&g);
 	free_arr(&x1);
 }

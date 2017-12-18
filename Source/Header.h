@@ -59,6 +59,19 @@ struct BinaryMatrixTreeNode {
 
 typedef struct BinaryMatrixTreeNode mnode;
 
+struct MatrixCSR {
+
+	int *ia = NULL;
+	int *ja = NULL;
+	double *values = NULL;
+};
+
+typedef struct MatrixCSR dcsr;
+
+//#define CSR_FORMAT
+#define STRUCT
+#define ONLINE
+
 #include "templates.h"
 
 #define PI 3.141592653589793238462643

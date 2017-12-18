@@ -295,7 +295,8 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 			if (j < nbr - 1) B[ind(j, n) + i] = -1.0;
 		}
 	}
-/*
+
+#if 0
 	time1 = omp_get_wtime();
 	// f[i + n * 0]
 	// попробуем использовать один и тот же 2D вектор SD для всех блоков NB
@@ -330,7 +331,7 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 			}
 	}
 	time1 = omp_get_wtime() - time1;
-	*/
+#endif
 
 	// через mkl
 
@@ -380,14 +381,84 @@ double u_ex(double x, double y, double z)
 	return x * x + y * y - 2.0 * z * z;
 }
 
+void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, double *DD, int lddd)
+{
+	int n = x.n * y.n;
+	int size = n * z.n;
+	
+	// diagonal blocks in dense format
+	for (int i = 0; i < n; i++)
+	{
+		DD[i + lddd * i] = -2.0 * (1.0 / (x.h * x.h) + 1.0 / (y.h * y.h) + 1.0 / (z.h * z.h));
+		if (i > 0) DD[i + lddd * (i - 1)] = 1.0 / (x.h * x.h);
+		if (i < n - 1) DD[i + lddd * (i + 1)] = 1.0 / (x.h * x.h);
+		if (i >= x.n) DD[i + lddd * (i - x.n)] = 1.0 / (y.h * y.h);
+		if (i <= n - x.n - 1)  DD[i + lddd * (i + x.n)] = 1.0 / (y.h * y.h);
+
+		if (i % x.n == 0 && i > 0)
+		{
+			DD[i - 1 + lddd * i] = 0;
+			DD[i + lddd * (i - 1)] = 0;
+		}
+	}
+
+}
+
+void GenRHSandSolution(size_m x, size_m y, size_m z,
+	/* output */ double *u, double *f)
+{
+	int n = x.n * y.n;
+	// approximation of exact right hand side (inner grid points)
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < z.n; k++)
+		for (int j = 0; j < y.n; j++)
+			for (int i = 0; i < x.n; i++)
+				f[k * n + j * x.n + i] = F_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
+
+	// for boundaries z = 0 and z = Lz we distract blocks B0 and Bm from the RHS
+#pragma omp parallel for schedule(dynamic,16)
+	for (int j = 0; j < y.n; j++)
+		for (int i = 0; i < x.n; i++)
+		{
+			f[ind(0, n) + ind(j, x.n) + i] -= u_ex((i + 1) * x.h, (j + 1) * y.h, 0) / (z.h * z.h); // u|z = 0
+			f[ind(z.n - 1, n) + ind(j, x.n) + i] -= u_ex((i + 1)  * x.h, (j + 1) * y.h, z.l) / (z.h * z.h); // u|z = h
+		}
+
+
+	// for each boundary 0 <= z <= Lz
+	// we distract 4 known boundaries f0, fl, g0, gL from right hand side
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < z.n; k++)
+	{
+		for (int i = 0; i < x.n; i++)
+		{
+			f[k * n + 0 * x.n + i] -= u_ex((i + 1) * x.h, 0, (k + 1) * z.h) / (y.h * y.h);
+			f[k * n + (y.n - 1) * x.n + i] -= u_ex((i + 1) * x.h, y.l, (k + 1) * z.h) / (y.h * y.h);
+		}
+		for (int j = 0; j < y.n; j++)
+		{
+			f[k * n + j * x.n + 0] -= u_ex(0, (j + 1) * y.h, (k + 1) * z.h) / (x.h * x.h);
+			f[k * n + j * x.n + x.n - 1] -= u_ex(x.l, (j + 1) * y.h, (k + 1) * z.h) / (x.h * x.h);
+		}
+	}
+
+	// approximation of inner points values
+#pragma omp parallel for schedule(dynamic)
+	for (int k = 0; k < z.n; k++)
+		for (int j = 0; j < y.n; j++)
+			for (int i = 0; i < x.n; i++)
+				u[ind(k, n) + ind(j, x.n) + i] = u_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
+
+	printf("RHS and solution are constructed\n");
+}
+
 void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
-	/* output */ double *D, int ldd, double *B, double *u, double *f)
+	/* output */ double *D, int ldd, double *B, double *u, double *f, double thresh)
 {
 	int n = x.n * y.n; // size of blocks
 	int nbr = z.n; // number of blocks in one row
 	int lddd = n;
 	int size = n * nbr;
-	double eps = 1e-6;
 	double done = 1.0;
 	double dzero = 0.0;
 	int ione = 1;
@@ -435,31 +506,15 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 	}
 //	if (i % x.n == 0 || (i + 1) % x.n == 0) DD[i + lddd * i] = 1.0;
 
-	// diagonal blocks in dense format
-	for (int i = 0; i < n; i++)
-	{
-		DD[i + lddd * i] = -2.0 * (1.0/(x.h * x.h) + 1.0/(y.h * y.h) + 1.0/(z.h * z.h));
-		if (i > 0) DD[i + lddd * (i - 1)] = 1.0 / (x.h * x.h);
-		if (i < n - 1) DD[i + lddd * (i + 1)] = 1.0 / (x.h * x.h);
-		if (i >= x.n) DD[i + lddd * (i - x.n)] = 1.0 / (y.h * y.h);
-		if (i <= n - x.n - 1)  DD[i + lddd * (i + x.n)] = 1.0 / (y.h * y.h);
-
-		if (i % x.n == 0 && i > 0)
-		{
-			DD[i - 1 + lddd * i] = 0;
-			DD[i + lddd * (i - 1)] = 0;
-		}
-		
-	}
-
+	// Set vector B
 #pragma omp parallel for schedule(dynamic)
-	for (int j = 0; j < nbr - 1; j++)
+	for (int j = 0; j < z.n - 1; j++)
 		for (int i = 0; i < n; i++)
 			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
-						
-#pragma omp parallel for schedule(dynamic)
+
 	for (int j = 0; j < nbr; j++)
 	{
+		GenerateDiagonal2DBlock(j, x, y, z, DD, lddd);
 		dlacpy("All", &n, &n, DD, &lddd, &D[ind(j, n) + ldd * 0], &ldd);
 	}
 	
@@ -480,12 +535,13 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 #endif
 
 	// check error between Au and F
-	rel_error(size, 1.0, Au, f, size, eps);
+	rel_error(size, 1.0, Au, f, size, thresh);
 
-	free_arr(&Au);
-	free_arr(&DD);
+	free(Au);
+	free(DD);
 
 }
+
 
 void Mult_Au(int n1, int n2, int n3, double *D, int ldd, double *B, double *u, double *Au /*output*/)
 {
@@ -541,6 +597,8 @@ void GenSolVector(int size, double *vector)
 	for (int i = 0; i < size; i++)
 		vector[i] = random(0.0, 1.0);
 }
+
+//void Resid_CSR(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes);
 
 void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
 			/* output */ double *G, int ldg, double *x_sol, int &success, double &RelRes, int &itcount)
@@ -617,10 +675,8 @@ void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, 
 void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x_sol, double *f, double *g, double &RelRes)
 {
 	int n = n1 * n2;
-	int nbr = n3;
-	int size = n * nbr;
+	int size = n * n3;
 	double *f1 = alloc_arr(size);
-	double *f_help = alloc_arr(n);
 	double done = 1.0;
 	int ione = 1;
 
@@ -638,7 +694,6 @@ void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x_sol,
 	RelRes = RelRes / dlange("Frob", &size, &ione, f, &size, NULL);
 
 	free_arr(&f1);
-	free_arr(&f_help);
 
 }
 
@@ -1424,6 +1479,15 @@ void Eye(int n, double *H, int ldh)
 			else H[i + ldh * j] = 0.0;
 }
 
+void Diag(int n, double *H, int ldh, double value)
+{
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+			if (j == i) H[i + ldh * j] = value;
+			else H[i + ldh * j] = 0.0;
+}
+
+
 void Hilbert(int n, double *H, int ldh)
 {
 #pragma omp parallel for simd schedule(simd:static)
@@ -1520,9 +1584,146 @@ map<vector<int>,double> dense_to_sparse(int m, int n, double *DD, int ldd, int *
 	return SD;
 }
 
+map<vector<int>, double> dense_to_CSR(int m, int n, double *A, int lda, int *ia, int *ja, double *values)
+{
+	map<vector<int>, double> CSR;
+	vector<int> v(2, 0);
+	int k = 0;
+	int ik = 0;
+	int first_elem_in_row = 0;
+	for (int i = 0; i < m; i++)
+	{
+		first_elem_in_row = 0;
+		for (int j = 0; j < n; j++)
+		{
+			if (fabs(A[i + lda * j]) != 0)
+			{
+				values[k] = A[i + lda * j];
+				if (first_elem_in_row == 0)
+				{
+					ia[ik] = k + 1;
+					ik++;
+					first_elem_in_row = 1;
+				}
+				ja[k] = j + 1;
+
+				v[0] = ia[ik - 1];
+				v[1] = ja[k];
+				CSR[v] = values[k];
+
+				k++;
+			}
+		}
+	}
+
+	return CSR;
+}
+
+map<vector<int>, double> concat_maps(const map<vector<int>, double>& map1, const map<vector<int>, double>& map2)
+{
+	map<vector<int>, double> map_res;
+	for (const auto& item : map1)
+	{
+		map_res.insert(item);
+	}
+	for (const auto& item : map2)
+	{
+		map_res.insert(item);
+	}
+	return map_res;
+}
+
+void shift_values(map<vector<int>, double>& CSR, int rows, int *ia, int shift_non_zeros, int non_zeros, int *ja, int shift_columns)
+{
+	for (int i = 0; i < rows; i++)
+		ia[i] += shift_non_zeros;
+
+	for (int i = 0; i < non_zeros; i++)
+		ja[i] += shift_columns;
+	
+}
+
+void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda, double *BR, int ldbr, double* AR, int ldar)
+{
+	if (BL == NULL)
+	{
+		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, BR, &ldbr, &AR[0 + ldar * n], &ldar);
+	}
+	else if (BR == NULL)
+	{
+		dlacpy("All", &m, &n, BL, &ldbl, &AR[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * n], &ldar);
+	}
+	else
+	{
+		dlacpy("All", &m, &n, BL, &ldbl, &AR[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * n], &ldar);
+		dlacpy("All", &m, &n, BR, &ldbr, &AR[0 + ldar * 2 * n], &ldar);
+	}
+}
+
+void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
+{
+	int n = x.n * y.n;
+	int size = n * z.n;
+
+	for (int blk = 0; blk < z.n - 1; blk++)
+	{
+		Diag(n, &BL[ind(blk, n)], ldbl, 1.0 / (z.h * z.h));
+		Diag(n, &BR[ind(blk, n)], ldbr, 1.0 / (z.h * z.h));
+	}
+
+	map<vector<int>, double> CSR;
+	CSR = block3diag_to_CSR(x.n, y.n, z.n, BL, ldbl, A, lda, BR, ldbr, Acsr);
+}
+
+map<vector<int>, double> block3diag_to_CSR(int n1, int n2, int blocks, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
+{
+	map<vector<int>, double> CSR_A;
+	map<vector<int>, double> CSR;
+	vector<int> v(2, 0);
+	int n = n1 * n2;
+	int k = 0;
+	int ik = 0;
+	int first_elem_in_row = 0;
+	double *AR = alloc_arr(n * 3 * n); int ldar = n;
+	int non_zeros_on_prev_level = 0;
+
+	for (int blk = 0; blk < blocks; blk++)
+	{
+		if (blk == 0)
+		{
+			construct_block_row(n, n, NULL, ldbl, &A[0], lda, &BR[0], ldbr, AR, ldar);
+		//	print(n, n, &AR[0 + ldar * n], ldar, "AR");
+			CSR_A = dense_to_CSR(n, 2 * n, AR, ldar, &Acsr->ia[0], &Acsr->ja[0], &Acsr->values[0]);
+			non_zeros_on_prev_level = CSR_A.size();
+		}
+		else if (blk == blocks - 1)
+		{
+			construct_block_row(n, n, &BL[ind(blk - 1, n)], ldbl, &A[ind(blk, n)], lda, NULL, ldbr, AR, ldar);
+			//print(n, 2 * n, AR, ldar, "ldar");
+			CSR_A = dense_to_CSR(n, 2 * n, AR, ldar, &Acsr->ia[ind(blk, n)], &Acsr->ja[non_zeros_on_prev_level], &Acsr->values[non_zeros_on_prev_level]);
+			shift_values(CSR_A, n, &Acsr->ia[ind(blk, n)], non_zeros_on_prev_level, CSR_A.size(), &Acsr->ja[non_zeros_on_prev_level], n * (blk - 1));
+		}
+		else
+		{
+			construct_block_row(n, n, &BL[ind(blk - 1, n)], ldbl, &A[ind(blk, n)], lda, &BR[ind(blk, n)], ldbr, AR, ldar);
+			CSR_A = dense_to_CSR(n, 3 * n, AR, ldar, &Acsr->ia[ind(blk, n)], &Acsr->ja[non_zeros_on_prev_level], &Acsr->values[non_zeros_on_prev_level]);
+
+			// shift values of arrays according to previous level
+			shift_values(CSR_A, n, &Acsr->ia[ind(blk, n)], non_zeros_on_prev_level, CSR_A.size(), &Acsr->ja[non_zeros_on_prev_level], n * (blk - 1));
+			non_zeros_on_prev_level += CSR_A.size();
+		}
+	}
+
+	free(AR);
+	return CSR;
+}
+
 void print_map(const map<vector<int>, double>& SD)
 {
-	cout << SD.size() << endl;
+	cout << "SD size = " << SD.size() << endl;
 	for (const auto& item : SD)
 		cout << "m = " << item.first[0] << " n = " << item.first[1] << " value = " << item.second << endl;
 
@@ -1538,6 +1739,13 @@ void print_vec(int size, double *vec1, double *vec2, char *name)
 	printf("%s\n", name);
 	for (int i = 0; i < size; i++)
 		printf("%d   %lf   %lf\n", i, vec1[i], vec2[i]);
+}
+
+void print_vec(int size, int *vec1, double *vec2, char *name)
+{
+	printf("%s\n", name);
+	for (int i = 0; i < size; i++)
+		printf("%d   %d   %lf\n", i, vec1[i], vec2[i]);
 }
 
 int compare_str(int n, char *s1, char *s2)
