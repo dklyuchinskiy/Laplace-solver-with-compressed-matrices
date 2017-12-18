@@ -48,24 +48,20 @@ int main()
 	// the size of matrix A: n^3 * n^3 = n^6
 	// here we have n^2 * n = n^3 
 	// init
-#ifndef ONLINE
-	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
-#else
-#endif
-	double *B = alloc_arr(size - n); // vector of diagonal elementes
-	double *x_orig = alloc_arr(size);
-	double *f = alloc_arr(size);
 
+	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
+	double *B = alloc_arr(size - n); // vector of diagonal elementes
 	double *B_mat = alloc_arr((size - n) * n); int ldb = size - n;
 
-	// result obtained
-	double *G = alloc_arr(size * n);
+	double *x_orig = alloc_arr(size);
 	double *x_sol = alloc_arr(size);
+	double *f = alloc_arr(size);
 
 	int ldd = size;
 	int ldg = size;
 
-	// CSR matrix
+#ifdef CSR_FORMAT
+	// Memory for CSR matrix
 	dcsr *Dcsr;
 	int non_zeros_in_block3diag = (n + (n - 1) * 2 + (n - x.n) * 2 - (x.n - 1) * 2) * z.n + 2 * (size - n);
 	Dcsr = (dcsr*)malloc(sizeof(dcsr));
@@ -73,6 +69,7 @@ int main()
 	Dcsr->ia = (int*)malloc((size + 1) * sizeof(int));
 	Dcsr->ja = (int*)malloc(non_zeros_in_block3diag * sizeof(int));
 	Dcsr->ia[size] = non_zeros_in_block3diag + 1;
+#endif
 
 	int success = 0;
 	int itcount = 0;
@@ -108,14 +105,17 @@ int main()
 		
 	printf("%lf %lf %lf\n", x.h, y.h, z.h);
 
-#ifndef ONLINE
 	GenMatrixandRHSandSolution2(x, y, z, D, ldd, B, x_orig, f, thresh);
-#else
-	GenRHSandSolution(x, y, z, x_orig, f);
-#endif
+//	GenRHSandSolution(x, y, z, x_orig, f);
+
 
 #ifdef CSR_FORMAT
 	GenSparseMatrix(x, y, z, B_mat, ldb, D, ldd, B_mat, ldb, Dcsr);
+	free_arr(&B_mat);
+#endif
+
+#ifdef ONLINE
+	free_arr(&D);
 #endif
 
 #ifdef CSR_FORMAT
@@ -138,9 +138,8 @@ int main()
 	system("pause");
 #else
 
-	//print(n, n, &B_mat[0], ldb, "B[0]");
-	//print(size, n, D, ldd, "D");
-
+//	print(n, n, &B_mat[0], ldb, "B[0]");
+//	print(size, n, D, ldd, "D");
 
 //	printf("all non_zero elements: %d\n", non_zeros_in_block3diag);
 //	for (int i = 0; i < size + 1; i ++)
@@ -161,6 +160,7 @@ int main()
 	// Calling the solver
 	
 #ifndef STRUCT
+	double *G = alloc_arr(size * n);
 	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
 #else
 	mnode **Gstr;
@@ -169,6 +169,10 @@ int main()
 #else
 	Block3DSPDSolveFastStruct(x, y, z, NULL, ldd, B, f, Dcsr, thresh, smallsize, ItRef, bench, Gstr, x_sol, success, RelRes, itcount);
 #endif
+	for (int i = z.n - 1; i >= 0; i--)
+		FreeNodes(n, Gstr[i], smallsize);
+
+	free(Gstr);
 #endif
 	printf("success=%d, itcount=%d\n", success, itcount);
 	printf("-----------------------------------\n");

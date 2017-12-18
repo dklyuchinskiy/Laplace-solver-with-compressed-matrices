@@ -68,7 +68,7 @@ struct MatrixCSR {
 
 typedef struct MatrixCSR dcsr;
 
-//#define CSR_FORMAT
+#define CSR_FORMAT
 #define STRUCT
 #define ONLINE
 
