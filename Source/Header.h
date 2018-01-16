@@ -7,7 +7,9 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <queue>
 #include "C:\Program Files (x86)\IntelSWTools\compilers_and_libraries_2017.4.210\windows\mkl\include\mkl.h"
+//#include "C:\Program Files (x86)\IntelSWTools\compilers_and_libraries_2017.4.210\windows\mkl\include\mkl_feast_evcount.h"
 using namespace std;
 
 #include <time.h>
@@ -49,7 +51,7 @@ typedef struct BinaryTreeNode node;
 
 struct BinaryMatrixTreeNode {
 
-	int p;
+	int p = 0;
 	double *U = NULL;
 	double *VT = NULL;
 	double *A = NULL;
@@ -67,6 +69,17 @@ struct MatrixCSR {
 };
 
 typedef struct MatrixCSR dcsr;
+
+struct list {
+	mnode* node; // указатель на структуру
+	struct list* next;
+};
+
+struct my_queue {
+	struct list *first, *last;
+};
+
+typedef struct list qlist;
 
 #define CSR_FORMAT
 #define STRUCT
