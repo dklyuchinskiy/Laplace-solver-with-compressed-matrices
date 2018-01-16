@@ -27,10 +27,7 @@ void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, dou
 void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 	/* output */ double *D, int ldd, double *B, double *x1, double *f, double thresh);
 
-
-
 // Tests
-
 void Test_SymRecCompress(int n, double eps, char *method, int smallsize);
 void Test_DiagMult(int n, double eps, char *method, int smallsize);
 void Test_RecMultL(int n, int k, double eps, char *method, int smallsize);
@@ -49,6 +46,9 @@ void Test_CopyStruct(int n, double eps, char *method, int smallsize);
 void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps, char *method);
 void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method);
 void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method);
+void Test_QueueList(int n, double eps, char* method, int smallsize);
+void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps);
+void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh);
 
 // Support
 
@@ -88,8 +88,6 @@ void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda,
 
 node* AllocNewNode1(int value);
 node* insert1(node* root, int value);
-int TreeSize(node* Node);
-int MaxDepth(node* Node);
 int MinValue(node* root);
 int MaxValue(node* root);
 void AllocNewNode2(node* Node, int value);
@@ -101,6 +99,11 @@ void alloc_dense_node(int n, mnode* &Cstr);
 void CopyStruct(int n, mnode* Gstr, mnode* &TD1str, int smallsize);
 bool IsBST(node *root);
 bool lookup(node *node, int value);
+
+int TreeSize(mnode* root);
+int MaxDepth(mnode* Node);
+void PrintRanks(mnode* root);
+void PrintRanksInWidth(mnode *root);
 
  // BinaryTrees - Solver
 
@@ -122,11 +125,24 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount);
 void ResidCSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_sol, double *f, double* g, double &RelRes);
-void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps);
-void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh);
 void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
 void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, double *DD, int lddd);
 void GenRHSandSolution(size_m x, size_m y, size_m z, double *u, double *f);
+map <vector<int>, double> BlockRowMat_to_CSR(int blk, int n1, int n2, int n3, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr, int& non_zeros_on_prev_level);
+void GenSparseMatrix2(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
+void count_dense_elements(int m, int n, double *A, int lda, int& non_zeros);
+
+// Queue
+void init(struct my_queue* &q);
+bool my_empty(struct my_queue* q);
+void push(struct my_queue* &q, mnode* node);
+void pop(struct my_queue* &q);
+mnode* front(struct my_queue* q);
+void PrintRanksInWidthList(mnode *root);
+void print_queue(struct my_queue* q);
+
+
+
 
 
 

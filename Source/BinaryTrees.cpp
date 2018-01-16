@@ -78,7 +78,8 @@ void insert2(node* *root, int value)
 
 // This problem demonstrates simple binary tree traversal.Given a binary tree, count the number of nodes in the tree.
 // recursive function
-int TreeSize(node* root)
+
+int TreeSize(mnode* root)
 {
 	int size = 0;
 
@@ -93,7 +94,7 @@ int TreeSize(node* root)
 
 }
 
-int MaxDepth(node* root)
+int MaxDepth(mnode* root)
 {
 	if (root == NULL)
 	{
@@ -208,8 +209,9 @@ bool IsBST(node *root)
 	return true;
 
 }
-#if 0
+
 // ---------- Compressed matrices --------------
+#if 0
 mnode* AllocNewMatrixLeaf(int n1, int n2)
 {
 	mnode* Node = (mnode*)malloc(sizeof(mnode)); // allocated memory for pointers only
@@ -237,6 +239,111 @@ mnode* AllocNewMatrixNode(int n1, int n2)
 }
 #endif
 
+void PrintRanks(mnode* root)
+{
+	if (root == NULL)
+	{
+		return;
+	}
+	else
+	{
+		printf("%3d ", root->p);
+		PrintRanks(root->left);
+		PrintRanks(root->right);
+	}
+}
+
+void PrintRanksInWidth(mnode *root)
+{
+	if (root == NULL)
+	{
+		return;
+	}
+	queue<mnode*> q; // Создаем очередь
+	q.push(root); // Вставляем корень в очередь
+
+	while (!q.empty()) // пока очередь не пуста
+	{
+		mnode* temp = q.front(); // Берем первый элемент в очереди
+		q.pop();  // Удаляем первый элемент в очереди
+		printf("%3d ", temp->p); // Печатаем значение первого элемента в очереди
+
+		if (temp->left != NULL)
+			q.push(temp->left);  // Вставляем  в очередь левого потомка
+
+		if (temp->right != NULL)
+			q.push(temp->right);  // Вставляем  в очередь правого потомка
+	}
+}
+
+void PrintRanksInWidthList(mnode *root)
+{
+	if (root == NULL)
+	{
+		return;
+	}
+	int count = 0;
+	struct my_queue* q; // Создаем очередь
+	init(q);
+	push(q, root); // Вставляем корень в очередь
+
+#ifdef DEBUG
+	print_queue(q);
+#endif
+	while (!my_empty(q)) // пока очередь не пуста
+	{
+		mnode* temp = front(q); // Берем первый элемент в очереди
+		pop(q);  // Удаляем первый элемент в очереди
+		printf("%3d ", temp->p); // Печатаем значение первого элемента в очереди
+
+		if (temp->left != NULL)
+		{
+			push(q, temp->left);  // Вставляем  в очередь левого потомка
+			count++;
+		}
+
+		if (temp->right != NULL)
+		{
+			push(q, temp->right);  // Вставляем  в очередь правого потомка
+			count++;
+		}
+#ifdef DEBUG
+		print_queue(q);
+#endif
+	}
+}
+
+void Test_QueueList(int n, double eps, char* method, int smallsize)
+{
+	printf("----Test for queue implementation with LIST---\n n = %d \n", n);
+	// A - matrix in dense order
+	double *A = alloc_arr(n * n);
+	double *A_init = alloc_arr(n * n);
+	int lda = n;
+
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+		{
+			A[i + lda * j] = 1.0 / (i + j + 1);
+			A_init[i + lda * j] = 1.0 / (i + j + 1);
+		}
+
+	mnode *ACstr;
+	SymRecCompressStruct(n, A, lda, ACstr, smallsize, eps, method);
+
+	//printf("first level. p = %d\n", ACstr->p);
+	//printf("second level. left: %d right: %d\n", Astr->left->p, Astr->right->p);
+
+	printf("Size: %d, MaxDepth: %d, Ranks: ", TreeSize(ACstr), MaxDepth(ACstr));
+//	PrintRanksInWidth(ACstr);
+	printf("List:\n");
+	PrintRanksInWidthList(ACstr);
+
+	FreeNodes(n, ACstr, smallsize);
+	free_arr(&A);
+	free_arr(&A_init);
+}
+
 // ---------------HSS technology----------
 
 void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
@@ -245,8 +352,6 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 	int mn = min(n1, n2);
 	int info = 0;
 	int lwork = -1;
-	Astr->p = 0;
-
 	double wkopt;
 
 	if (compare_str(3, method, "SVD"))
@@ -275,17 +380,15 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 		}
 
 		// Alloc new node
-
 		Astr->U = alloc_arr(n2 * Astr->p);
 		Astr->VT = alloc_arr(Astr->p * n1);
 		dlacpy("All", &n2, &Astr->p, A, &lda, Astr->U, &n2);
 		dlacpy("All", &Astr->p, &n1, VT, &ldvt, Astr->VT, &Astr->p);
 	
-
 #ifdef DEBUG
 		printf("LowRankStructure function after SVD: n2 = %d, n1 = %d, p = %d\n", n2, n1, Astr->p);
-		print(n2, Astr->p, Astr->U, n2, "U");
-		print(Astr->p, n1, Astr->VT, Astr->p, "VT");
+	//	print(n2, Astr->p, Astr->U, n2, "U");
+	//	print(Astr->p, n1, Astr->VT, Astr->p, "VT");
 
 #endif
 		free_arr(&VT);
@@ -302,8 +405,6 @@ mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
 	int info = 0;
 	int lwork = -1;
 	mnode* Astr = (mnode*)malloc(sizeof(mnode));
-	Astr->p = 0;
-
 	double wkopt;
 
 	if (compare_str(3, method, "SVD"))
@@ -318,7 +419,6 @@ mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
 		// A = U1 * S * V1
 		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, VT, &ldvt, VT, &ldvt, work, &lwork, &info);
 
-
 		for (int j = 0; j < mn; j++)
 		{
 			double s1 = S[j] / S[0];
@@ -332,7 +432,6 @@ mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
 		}
 
 		// Alloc new node
-
 		Astr->U = alloc_arr(n2 * Astr->p);
 		Astr->VT = alloc_arr(Astr->p * n1);
 		dlacpy("All", &n2, &Astr->p, A, &lda, Astr->U, &n2);
@@ -360,12 +459,10 @@ void Test_LowRankApproxStruct(int m, int n, double eps, char *method)
 			A_init[i + lda * j] = 1.0 / (n + i + j + 1);
 		}
 
-
 	double alpha = 1.0;
 	double beta = 0.0;
 
-
-#if 0
+#if 1
 	mnode *Astr = (mnode*)malloc(sizeof(mnode));
 	printf("Test for LowRankApproximationStruct m = %d n = %d ", m, n);
 	LowRankApproxStruct(m, n, A, lda, Astr, eps, "SVD"); // memory allocation for Astr inside function
@@ -489,7 +586,6 @@ void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
 		for (int i = 0; i < n; i++)
 		{
 			H2[i + ldh * j] = H2[i + ldh * j] - H[i + ldh * j];
-
 		}
 	}
 
@@ -503,6 +599,7 @@ void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
 	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
 	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
 
+	FreeNodes(n, H1str, smallsize);
 	free_arr(&H);
 	free_arr(&H2);
 	free_arr(&H1);
@@ -577,7 +674,7 @@ void Test_DiagMultStruct(int n, double eps, char *method, int smallsize)
 	print(n, n, H1, ldh, "Initial H");
 #endif
 
-	mnode *HCstr = (mnode*)malloc(sizeof(mnode));
+	mnode *HCstr;
 	// Compress H1 to structured form
 	SymRecCompressStruct(n, H1, ldh, HCstr, smallsize, eps, method);
 
@@ -595,6 +692,7 @@ void Test_DiagMultStruct(int n, double eps, char *method, int smallsize)
 	// Compare Hd and H2
 	rel_error(n, n, H2, Hd, ldh, eps);
 
+	FreeNodes(n, HCstr, smallsize);
 	free_arr(&Hd); // diagonal Hd = D * H * D
 	free_arr(&H1); // compressed H
 	free_arr(&H2); // recovered H after D * H1 * D
@@ -711,6 +809,12 @@ void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize)
 	print(n, n, H, ldy, "H comp");
 	print(n, k, Y1, ldy, "Y1 rec");
 #endif
+
+	FreeNodes(n, Hstr, smallsize);
+	free_arr(&H);
+	free_arr(&X);
+	free_arr(&Y);
+	free_arr(&Y1);
 }
 
 // Функция вычисления линейной комбинации двух сжатых матриц
@@ -762,17 +866,16 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 		LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p1, eps, "SVD"); // перезапись Y21
 		LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");  // перезапись Y12
 
-
 		// Y = V21'*V12;
 		double *Y = alloc_arr(p1 * p2);
 		dgemm("No", "No", &p1, &p2, &n1_dbl, &alpha_loc, V21, &ldv21, Y12, &ldy12, &beta_loc, Y, &p1); // mn, mn
 
 		// C{2,1} = U21*Y;   
-		Cstr->U = (double*)malloc(n2 * p2 * sizeof(double));
+		Cstr->U = alloc_arr(n2 * p2);
 		dgemm("No", "No", &n2, &p2, &p1, &alpha_loc, Y21, &ldy21, Y, &p1, &beta_loc, Cstr->U, &n2); // mn
 
 		// C{1,2} = U12';
-		Cstr->VT = (double*)malloc(p2 * n1 * sizeof(double));
+		Cstr->VT = alloc_arr(p2 * n1);
 		dlacpy("All", &p2, &n1, V12, &ldv12, Cstr->VT, &p2); // n1, n2
 		Cstr->p = p2;
 
@@ -842,6 +945,9 @@ void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps,
 	// |GcR - G| / |G|
 	rel_error(n, n, GcR, G, ldg, eps);
 
+	FreeNodes(n, H1str, smallsize);
+	FreeNodes(n, H2str, smallsize);
+	FreeNodes(n, Gstr, smallsize);
 	free_arr(&H1);
 	free_arr(&H2);
 	free_arr(&G);
@@ -1007,6 +1113,7 @@ void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double
 	// || B_rec - H || / || H ||
 	rel_error(n, n, B_rec, H, ldh, eps);
 
+	FreeNodes(n, Bstr, smallsize);
 	free_arr(&B);
 	free_arr(&B_rec);
 	free_arr(&H);
@@ -1068,6 +1175,7 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		SymCompRecInvStruct(n2, Astr->right, X22str, smallsize, eps, method);
 
 		// Save X22 * U to B{2,1}
+//		printf("Allocated U: %d * %d\n", n2, Bstr->p);
 		Bstr->U = alloc_arr(n2 * Bstr->p);
 		RecMultLStruct(n2, Bstr->p, X22str, Astr->U, n2, Bstr->U, n2, smallsize);
 
@@ -1086,7 +1194,8 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		mkl_dimatcopy('C', 'N', n1, Bstr->p, -1.0, B12, ldb12, ldb12);
 
 		// B{1,2} = transpose(B12)
-		Bstr->VT = alloc_arr(Bstr->p *n1);
+	//	printf("Allocated VT: %d * %d\n", Bstr->p, n1);
+		Bstr->VT = alloc_arr(Bstr->p * n1);
 		Mat_Trans(n1, Bstr->p, B12, ldb12, Bstr->VT, Bstr->p);
 
 		// Y = -(A{1,2})' * B{1,2} = -VT * (-X11 * V) = - VT * B12 = (p x n1) * (n1 x p)
@@ -1095,6 +1204,8 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		// Update X22 + (X22*U) * VT * X11 * V (UT * X22) = X22 + B21 * Y * B21T = (n2 x n2) + (n2 x p) * (p x p) * (p x n2)
 		SymCompUpdate2Struct(n2, Bstr->p, X22str, alpha_one, Y, ldy, Bstr->U, n2, Bstr->right, smallsize, eps, method);
 
+		FreeNodes(n1, X11str, smallsize);
+		FreeNodes(n2, X22str, smallsize);
 		free_arr(&X11);
 		free_arr(&X22);
 		free_arr(&Y);
@@ -1105,7 +1216,7 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 
 void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
 {
-	printf("***** Test_SymCompRecInvStruct n = %d eps = %lf **** ", n, eps);
+	printf("***** Test_SymCompRecInvStruct n = %d eps = %lf ****", n, eps);
 	double *H = alloc_arr(n * n);
 	double *Hc = alloc_arr(n * n);
 	double *Bc = alloc_arr(n * n);
@@ -1144,6 +1255,13 @@ void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
 	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
 	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
 
+	FreeNodes(n, HCstr, smallsize);
+	FreeNodes(n, BCstr, smallsize);
+	free_arr(&H);
+	free_arr(&Hc);
+	free_arr(&Bc);
+	free_arr(&Brec);
+	free_arr(&Y);
 }
 
 #if 1
@@ -1215,14 +1333,12 @@ void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B
 		printf("****************************\n");
 	}
 
-	
 	for (int i = n3 - 1; i >= 0; i--)
 	{
 		FreeNodes(n, DCstr[i], smallsize);
 	}
 
 	free(DCstr);
-
 }
 #if 1
 /* Функция вычисления разложения симметричной блочно-диагональной матрицы с использование сжатого формата.
@@ -1230,7 +1346,7 @@ void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B
 void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, double *B,
 	double eps, int smallsize, char *bench)
 {
-	int n = x. n * y.n;
+	int n = x.n * y.n;
 	int nbr = z.n; // size of D is equal to nbr blocks by n elements
 	int size = n * nbr;
 	double *DD = alloc_arr(n * n); int lddd = n;
@@ -1240,8 +1356,6 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	for (int j = 0; j < z.n - 1; j++)
 		for (int i = 0; i < n; i++)
 			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
-
-	
 
 	if (compare_str(7, bench, "display"))
 	{
@@ -1256,6 +1370,9 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	SymRecCompressStruct(n, DD, lddd, DCstr, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
 
+	printf("DC ranks: ");
+	PrintRanksInWidthList(DCstr);
+
 	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
 
 	tt = omp_get_wtime();
@@ -1264,7 +1381,6 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	tt = omp_get_wtime() - tt;
 
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
-
 	FreeNodes(n, DCstr, smallsize);
 	free(DD);
 
@@ -1331,7 +1447,6 @@ void DirSolveFastDiagStruct(int n1, int n2, int n3, mnode* *Gstr, double *B, dou
 #pragma omp parallel for simd schedule(simd:static)
 		for (int i = 0; i < n; i++)
 			tb[ind(k, n) + i] = f[ind(k, n) + i] - y[i];
-
 	}
 
 	RecMultLStruct(n, 1, Gstr[nbr - 1], &tb[ind(nbr - 1, n)], size, &x[ind(nbr - 1, n)], size, smallsize);
@@ -1456,6 +1571,9 @@ void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, dou
 		free(x_test);
 	}
 
+	free_arr(&f1);
+	free_arr(&f2);
+	free_arr(&g);
 }
 
 void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
@@ -1546,7 +1664,7 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 #endif
 				itcount = itcount + 1;
 				tt = omp_get_wtime() - tt;
-				if (compare_str(7, bench, "display")) printf("itcount=%d, RelRes=%lf, Time=%lf\n", itcount, RelRes, tt);
+				if (compare_str(7, bench, "display")) printf("itcount = %d, RelRes = %lf, Time = %lf\n", itcount, RelRes, tt);
 			}
 			if ((RelRes < thresh) && (itcount < ItRef)) success = 1; // b
 
@@ -1580,8 +1698,11 @@ void Test_CopyStruct(int n, double eps, char *method, int smallsize)
 	SymResRestoreStruct(n, Hcopy_str, H2, ldh, smallsize);
 
 	rel_error(n, n, H2, H1, ldh, eps);
+
+	FreeNodes(n, Hstr, smallsize);
+	FreeNodes(n, Hcopy_str, smallsize);
+	free_arr(&H2);
+	free_arr(&H1);
+	free_arr(&H);
 }
-
-
-
 #endif

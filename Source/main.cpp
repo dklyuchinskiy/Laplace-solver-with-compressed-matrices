@@ -29,7 +29,7 @@ int main()
 	int smallsize = 400;
 	double thresh = 1e-6; // stop level of algorithm by relative error
 	int ItRef = 200; // Maximal number of iterations in refirement
-	char bench[255] = "display"; // parameter into solver to show internal results
+	char bench[255] = "no"; // parameter into solver to show internal results
 	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
 	int non_zeros_in_3diag = n + (n - 1) * 2 + (n - n1) * 2 - (n1 - 1) * 2;
 
@@ -49,16 +49,23 @@ int main()
 	// here we have n^2 * n = n^3 
 	// init
 
+#ifndef ONLINE
 	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
-	double *B = alloc_arr(size - n); // vector of diagonal elementes
 	double *B_mat = alloc_arr((size - n) * n); int ldb = size - n;
+	int ldd = size;
+	int ldg = size;
+#else
+	double *D = alloc_arr(n * n); // it's a matrix with size n^3 * n^2 = size * n
+	double *B_mat = alloc_arr(n * n);
 
+	int ldd = n;
+	int ldb = n;
+#endif
+
+	double *B = alloc_arr(size - n); // vector of diagonal elementes
 	double *x_orig = alloc_arr(size);
 	double *x_sol = alloc_arr(size);
 	double *f = alloc_arr(size);
-
-	int ldd = size;
-	int ldg = size;
 
 #ifdef CSR_FORMAT
 	// Memory for CSR matrix
@@ -105,12 +112,23 @@ int main()
 		
 	printf("%lf %lf %lf\n", x.h, y.h, z.h);
 
+#ifndef ONLINE
 	GenMatrixandRHSandSolution2(x, y, z, D, ldd, B, x_orig, f, thresh);
-//	GenRHSandSolution(x, y, z, x_orig, f);
-
+#else
+	GenRHSandSolution(x, y, z, x_orig, f);
+	// Set vector B
+#pragma omp parallel for schedule(dynamic)
+	for (int j = 0; j < z.n - 1; j++)
+		for (int i = 0; i < n; i++)
+			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
+#endif
 
 #ifdef CSR_FORMAT
+#ifndef ONLINE
 	GenSparseMatrix(x, y, z, B_mat, ldb, D, ldd, B_mat, ldb, Dcsr);
+#else
+	GenSparseMatrix2(x, y, z, B_mat, n, D, n, B_mat, n, Dcsr);
+#endif
 	free_arr(&B_mat);
 #endif
 
@@ -154,7 +172,7 @@ int main()
 	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
 	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
 	printf("Compressed blocks method\n");
-	printf("Parameters: thresh=%g, smallsize=%d \n", thresh, smallsize);
+	printf("Parameters: thresh = %g, smallsize = %d \n", thresh, smallsize);
 
 
 	// Calling the solver
@@ -169,18 +187,29 @@ int main()
 #else
 	Block3DSPDSolveFastStruct(x, y, z, NULL, ldd, B, f, Dcsr, thresh, smallsize, ItRef, bench, Gstr, x_sol, success, RelRes, itcount);
 #endif
-	for (int i = z.n - 1; i >= 0; i--)
-		FreeNodes(n, Gstr[i], smallsize);
 
-	free(Gstr);
 #endif
-	printf("success=%d, itcount=%d\n", success, itcount);
+	printf("success = %d, itcount = %d\n", success, itcount);
 	printf("-----------------------------------\n");
 
 	//print_vec(size, x_orig, x_sol, "x_orig and x_sol");
 
 	printf("Computing error ||x_{exact}-x_{comp}||/||x_{exact}||\n");
 	rel_error(n, 1, x_sol, x_orig, size, thresh);
+
+	printf("----------Trees information-----------\n");
+
+	for (int i = z.n - 1; i >= 0; i--)
+	{
+		printf("For block %2d. Size: %d, MaxDepth: %d, Ranks: ", i, TreeSize(Gstr[i]), MaxDepth(Gstr[i]));
+		PrintRanksInWidthList(Gstr[i]);
+		printf("\n");
+	}
+
+	for (int i = z.n - 1; i >= 0; i--)
+		FreeNodes(n, Gstr[i], smallsize);
+
+	free(Gstr);
 
 #endif
 #endif
@@ -354,7 +383,15 @@ int main()
 	cout << is_node << endl;
 	is_node = lookup(root2, 5);
 	cout << is_node << endl;*/
+#elif (PROBLEM == 12)
+	
+	int m = 10;
+	int n = 10;
+	double eps = 1e-06;
+	char method[255] = "SVD";
+	int smallsize = 3;
 
+	Test_QueueList(n, eps, method, smallsize);
 
 #endif
 	system("pause");

@@ -1,4 +1,5 @@
 #include "Header.h"
+#include "templates.h"
 
 // ---------- Compressed matrices --------------
 
@@ -198,7 +199,6 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 		for (int i = 0; i < n; i++)
 		{
 			H2[i + ldh * j] = H2[i + ldh * j] - H[i + ldh * j];
-
 		}
 	}
 
@@ -360,7 +360,7 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 
 	time2 = omp_get_wtime() - time2;
 
-	printf("time1 = %lf\ntime_mkl = %lf\n", time1, time2);
+	printf("time_mkl = %lf\n", time2);
 
 	free_arr(&DD);
 	free_arr(&d);
@@ -1619,6 +1619,23 @@ map<vector<int>, double> dense_to_CSR(int m, int n, double *A, int lda, int *ia,
 	return CSR;
 }
 
+void count_dense_elements(int m, int n, double *A, int lda, int& non_zeros)
+{
+	int k = 0;
+#pragma omp parallel for schedule(guided) reduction(+:k)
+	for (int i = 0; i < m; i++)
+	{
+		for (int j = 0; j < n; j++)
+		{
+			if (fabs(A[i + lda * j]) != 0)
+			{
+				k++;
+			}
+		}
+	}
+	non_zeros = k;
+}
+
 map<vector<int>, double> concat_maps(const map<vector<int>, double>& map1, const map<vector<int>, double>& map2)
 {
 	map<vector<int>, double> map_res;
@@ -1635,31 +1652,33 @@ map<vector<int>, double> concat_maps(const map<vector<int>, double>& map1, const
 
 void shift_values(map<vector<int>, double>& CSR, int rows, int *ia, int shift_non_zeros, int non_zeros, int *ja, int shift_columns)
 {
+#pragma omp parallel for schedule(simd:static)
 	for (int i = 0; i < rows; i++)
 		ia[i] += shift_non_zeros;
 
+#pragma omp parallel for schedule(simd:static)
 	for (int i = 0; i < non_zeros; i++)
 		ja[i] += shift_columns;
 	
 }
 
-void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda, double *BR, int ldbr, double* AR, int ldar)
+void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda, double *BR, int ldbr, double* Arow, int ldar)
 {
 	if (BL == NULL)
 	{
-		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * 0], &ldar);
-		dlacpy("All", &m, &n, BR, &ldbr, &AR[0 + ldar * n], &ldar);
+		dlacpy("All", &m, &n, A, &lda, &Arow[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, BR, &ldbr, &Arow[0 + ldar * n], &ldar);
 	}
 	else if (BR == NULL)
 	{
-		dlacpy("All", &m, &n, BL, &ldbl, &AR[0 + ldar * 0], &ldar);
-		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * n], &ldar);
+		dlacpy("All", &m, &n, BL, &ldbl, &Arow[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, A, &lda, &Arow[0 + ldar * n], &ldar);
 	}
 	else
 	{
-		dlacpy("All", &m, &n, BL, &ldbl, &AR[0 + ldar * 0], &ldar);
-		dlacpy("All", &m, &n, A, &lda, &AR[0 + ldar * n], &ldar);
-		dlacpy("All", &m, &n, BR, &ldbr, &AR[0 + ldar * 2 * n], &ldar);
+		dlacpy("All", &m, &n, BL, &ldbl, &Arow[0 + ldar * 0], &ldar);
+		dlacpy("All", &m, &n, A, &lda, &Arow[0 + ldar * n], &ldar);
+		dlacpy("All", &m, &n, BR, &ldbr, &Arow[0 + ldar * 2 * n], &ldar);
 	}
 }
 
@@ -1678,6 +1697,58 @@ void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double 
 	CSR = block3diag_to_CSR(x.n, y.n, z.n, BL, ldbl, A, lda, BR, ldbr, Acsr);
 }
 
+void GenSparseMatrix2(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
+{
+	int n = x.n * y.n;
+	int size = n * z.n;
+	int non_zeros_on_prev_level = 0;
+	map<vector<int>, double> CSR;
+
+	Diag(n, BL, ldbl, 1.0 / (z.h * z.h));
+	Diag(n, BR, ldbr, 1.0 / (z.h * z.h));
+
+	for (int blk = 0; blk < z.n; blk++)
+	{
+		GenerateDiagonal2DBlock(blk, x, y, z, A, lda);
+		CSR = BlockRowMat_to_CSR(blk, x.n, y.n, z.n, BL, ldbl, A, lda, BR, ldbr, Acsr, non_zeros_on_prev_level); // ВL, ВR and A - is 2D dimensional matrices (n x n)
+	}
+}
+
+map<vector<int>, double> BlockRowMat_to_CSR(int blk, int n1, int n2, int n3, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr, int& non_zeros_on_prev_level)
+{
+	map<vector<int>, double> CSR_A;
+	map<vector<int>, double> CSR;
+	vector<int> v(2, 0);
+	int n = n1 * n2;
+	int k = 0;
+	double *Arow = alloc_arr(n * 3 * n); int ldar = n;
+
+	if (blk == 0)
+	{
+		construct_block_row(n, n, NULL, ldbl, A, lda, BR, ldbr, Arow, ldar);
+		CSR_A = dense_to_CSR(n, 2 * n, Arow, ldar, &Acsr->ia[0], &Acsr->ja[0], &Acsr->values[0]);
+		non_zeros_on_prev_level = CSR_A.size();
+	}
+	else if (blk == n3 - 1)
+	{
+		construct_block_row(n, n, BL, ldbl, A, lda, NULL, ldbr, Arow, ldar);
+		CSR_A = dense_to_CSR(n, 2 * n, Arow, ldar, &Acsr->ia[ind(blk, n)], &Acsr->ja[non_zeros_on_prev_level], &Acsr->values[non_zeros_on_prev_level]);
+		shift_values(CSR_A, n, &Acsr->ia[ind(blk, n)], non_zeros_on_prev_level, CSR_A.size(), &Acsr->ja[non_zeros_on_prev_level], n * (blk - 1));
+	}
+	else
+	{
+		construct_block_row(n, n, BL, ldbl, A, lda, BR, ldbr, Arow, ldar);
+		CSR_A = dense_to_CSR(n, 3 * n, Arow, ldar, &Acsr->ia[ind(blk, n)], &Acsr->ja[non_zeros_on_prev_level], &Acsr->values[non_zeros_on_prev_level]);
+
+		// shift values of arrays according to previous level
+		shift_values(CSR_A, n, &Acsr->ia[ind(blk, n)], non_zeros_on_prev_level, CSR_A.size(), &Acsr->ja[non_zeros_on_prev_level], n * (blk - 1));
+		non_zeros_on_prev_level += CSR_A.size();
+	}
+
+	free(Arow);
+	return CSR;
+}
+
 map<vector<int>, double> block3diag_to_CSR(int n1, int n2, int blocks, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
 {
 	map<vector<int>, double> CSR_A;
@@ -1685,8 +1756,6 @@ map<vector<int>, double> block3diag_to_CSR(int n1, int n2, int blocks, double *B
 	vector<int> v(2, 0);
 	int n = n1 * n2;
 	int k = 0;
-	int ik = 0;
-	int first_elem_in_row = 0;
 	double *AR = alloc_arr(n * 3 * n); int ldar = n;
 	int non_zeros_on_prev_level = 0;
 
