@@ -1,5 +1,6 @@
 #include "Header.h"
 #include "templates.h"
+#include "TestSuite.h"
 
 bool lookup(node *node, int value)
 {
@@ -366,7 +367,6 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 		// A = U1 * S * V1
 		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, VT, &ldvt, VT, &ldvt, work, &lwork, &info);
 																					
-
 		for (int j = 0; j < mn; j++)
 		{
 			double s1 = S[j] / S[0];
@@ -444,46 +444,6 @@ mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
 	return Astr;
 }
 
-void Test_LowRankApproxStruct(int m, int n, double eps, char *method)
-{
-	// A - matrix in dense order
-	double *A = alloc_arr(m * n);
-	double *A_init = alloc_arr(m * n);
-	double *A_rec = alloc_arr(m * n);
-	int lda = m;
-
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < m; i++)
-		{
-			A[i + lda * j] = 1.0 / (n + i + j + 1);
-			A_init[i + lda * j] = 1.0 / (n + i + j + 1);
-		}
-
-	double alpha = 1.0;
-	double beta = 0.0;
-
-#if 1
-	mnode *Astr = (mnode*)malloc(sizeof(mnode));
-	printf("Test for LowRankApproximationStruct m = %d n = %d ", m, n);
-	LowRankApproxStruct(m, n, A, lda, Astr, eps, "SVD"); // memory allocation for Astr inside function
-#else
-	mnode *Astr;
-	printf("Test for LowRankApproximationStruct2 using return m = %d n = %d ", m, n);
-	Astr = LowRankApproxStruct2(m, n, A, lda, eps, "SVD"); // memory allocation for Astr inside function
-#endif
-	printf("p = %d ", Astr->p);
-
-	dgemm("no", "no", &m, &n, &Astr->p, &alpha, Astr->U, &m, Astr->VT, &Astr->p, &beta, A_rec, &lda);
-
-
-	rel_error(m, n, A_rec, A_init, lda, eps);
-	free_arr(&A);
-	free_arr(&A_init);
-	free_arr(&A_rec);
-	free_arr(&Astr->U);
-	free_arr(&Astr->VT);
-	free(Astr);
-}
 
 void SymRecCompressStruct(int n /* order of A */, double *A /* init matrix */, const int lda, 
 	/*output*/ mnode* &ACstr, 
@@ -529,9 +489,8 @@ void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ld
 	}
 	else
 	{
-		int n1, n2;
-		n2 = (int)ceil(n / 2.0); // округление в большую сторону
-		n1 = n - n2;
+		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		int n1 = n - n2;
 
 		// A21 = A21 * A12
 		dgemm("Notrans", "Notrans", &n2, &n1, &H1str->p, &alpha, H1str->U, &n2, H1str->VT, &H1str->p, &beta, &H2[n1 + ldh * 0], &ldh);
@@ -543,66 +502,6 @@ void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ld
 		SymResRestoreStruct(n1, H1str->left, &H2[0 + ldh * 0], ldh, small_size);
 		SymResRestoreStruct(n2, H1str->right, &H2[n1 + ldh * n1], ldh, small_size);
 	}
-}
-
-void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
-{
-	printf("*****Test for SymRecCompressStruct  n = %d eps = %e ******* ", n, eps);
-	char frob = 'F';
-	double norm = 0;
-
-	double *H = new double[n*n]; // init
-	double *H1 = new double[n*n]; // compressed
-	double *H2 = new double[n*n]; // recovered init
-
-	H[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
-
-	int ldh = n;
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < n; i++)
-		{
-			H[i + ldh * j] = 1.0 / (i + j + 1);
-			H1[i + ldh * j] = 1.0 / (i + j + 1);
-		}
-
-#ifdef DEBUG
-	print(n, n, H1, ldh, "H1");
-#endif
-
-	mnode *H1str; // pointer to the tree head
-	SymRecCompressStruct(n, H1, ldh, H1str, smallsize, eps, "SVD"); // recursive function means recursive allocation of memory for structure fields
-	SymResRestoreStruct(n, H1str, H2, ldh, smallsize);
-
-#ifdef DEBUG
-	//print(n, n, H1, ldh, "H1 compressed");
-	print(n, n, H2, ldh, "H recovered");
-#endif
-
-	// Norm of residual || A - L * U ||
-	for (int j = 0; j < n; j++)
-	{
-		for (int i = 0; i < n; i++)
-		{
-			H2[i + ldh * j] = H2[i + ldh * j] - H[i + ldh * j];
-		}
-	}
-
-#ifdef DEBUG
-	print(n, n, H, ldh, "H init");
-	print(n, n, H2, ldh, "diff");
-#endif
-
-	norm = dlange(&frob, &n, &n, H2, &ldh, NULL);
-	norm = norm / dlange(&frob, &n, &n, H, &ldh, NULL);
-	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
-	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
-
-	FreeNodes(n, H1str, smallsize);
-	free_arr(&H);
-	free_arr(&H2);
-	free_arr(&H1);
 }
 
 /* Рекурсивная функция вычисления DAD, где D - диагональная матрица, а Astr - сжатая в структуре */
@@ -643,68 +542,12 @@ void DiagMultStruct(int n, mnode* Astr, double *d, int small_size)
 	}
 }
 
-void Test_DiagMultStruct(int n, double eps, char *method, int smallsize)
-{
-	printf("*****Test for DiagMultStruct  n = %d ******* ", n);
-	double *Hd = alloc_arr(n*n); // diagonal Hd = D * H * D
-	double *H1 = alloc_arr(n*n); // compressed H
-	double *H2 = alloc_arr(n*n); // recovered H after D * H1 * D
-	double *d = alloc_arr(n);
-	double norm = 0;
-
-	Hd[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
-
-	int ldh = n;
-	for (int j = 0; j < n; j++)
-	{
-		d[j] = j + 1;
-	}
-
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < n; i++)
-		{
-			Hd[i + ldh * j] = 1.0 / (i + j + 1);
-			Hd[i + ldh * j] *= d[j];
-			Hd[i + ldh * j] *= d[i];
-			H1[i + ldh * j] = 1.0 / (i + j + 1);
-		}
-#ifdef DEBUG
-	print(n, n, H1, ldh, "Initial H");
-#endif
-
-	mnode *HCstr;
-	// Compress H1 to structured form
-	SymRecCompressStruct(n, H1, ldh, HCstr, smallsize, eps, method);
-
-	// Compressed H1 = D * H * D
-	DiagMultStruct(n, HCstr, d, smallsize);
-
-	// Recove H1 to uncompressed form
-	SymResRestoreStruct(n, HCstr, H2, ldh, smallsize);
-
-#ifdef DEBUG
-	print(n, n, Hd, ldh, "Initial Hd = D * H * D");
-	print(n, n, H2, ldh, "Recovered H2 = (D * H * D)comp");
-#endif
-
-	// Compare Hd and H2
-	rel_error(n, n, H2, Hd, ldh, eps);
-
-	FreeNodes(n, HCstr, smallsize);
-	free_arr(&Hd); // diagonal Hd = D * H * D
-	free_arr(&H1); // compressed H
-	free_arr(&H2); // recovered H after D * H1 * D
-	free_arr(&d);
-
-}
-
 /* Y = A * X, where A - compressed n * n, X - dense n * m, Y - dense n * m */
 void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, int ldy, int smallsize)
 {
 	double alpha = 1.0;
 	double beta = 0.0;
+
 	if (n <= smallsize)
 	{
 		dgemm("No", "No", &n, &m, &n, &alpha, Astr->A, &n, X, &ldx, &beta, Y, &ldy);
@@ -755,67 +598,7 @@ void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, in
 	}
 }
 
-/* Тест на сравнение результатов умножения Y = H * X сжимаемой матрицы H на произвольную X.
-Сравниваются результаты со сжатием и без */
-void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize)
-{
-	printf("*****Test for RecMultLStruct  n = %d k = %d ******* ", n, k);
-	double *H = new double[n*n]; // init and compressed
-	double *X = new double[n*k];
-	double *Y = new double[n*k]; // init Y
-	double *Y1 = new double[n*k]; // after multiplication woth compressed
-	double norm = 0;
-	double alpha = 1.0;
-	double beta = 0.0;
 
-	int ldh = n;
-	int ldy = n;
-	int ldx = n;
-
-	H[0:n*n] = 0;
-	X[0:n*k] = 0;
-	Y[0:n*k] = 0;
-	Y1[0:n*k] = 0;
-
-	for (int i = 0; i < n; i++)
-	{
-		for (int j = 0; j < n; j++)
-		{
-			H[i + ldh * j] = 1.0 / (i + j + 1);
-		}
-		for (int j = 0; j < k; j++)
-		{
-			X[i + ldx * j] = 1.0 / (i + j + 1);
-		}
-	}
-
-	dgemm("No", "No", &n, &k, &n, &alpha, H, &ldh, X, &ldx, &beta, Y, &ldy);
-
-#ifdef DEBUG
-	print(n, n, H, ldy, "H init");
-	print(n, k, X, ldy, "X init");
-	print(n, k, Y, ldy, "Y init");
-#endif
-	mnode *Hstr;
-	// Compress H
-	SymRecCompressStruct(n, H, ldh, Hstr, smallsize, eps, method);
-
-	// RecMult Y1 = comp(H) * X
-	RecMultLStruct(n, k, Hstr, X, ldx, Y1, ldy, smallsize);
-
-	rel_error(n, k, Y1, Y, ldy, eps);
-
-#ifdef DEBUG
-	print(n, n, H, ldy, "H comp");
-	print(n, k, Y1, ldy, "Y1 rec");
-#endif
-
-	FreeNodes(n, Hstr, smallsize);
-	free_arr(&H);
-	free_arr(&X);
-	free_arr(&Y);
-	free_arr(&Y1);
-}
 
 // Функция вычисления линейной комбинации двух сжатых матриц
 void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method)
@@ -891,72 +674,6 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 
 }
 
-void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps, char *method)
-{
-	printf("*****Test for Add n = %d ******* ", n);
-	double *H1 = alloc_arr(n*n);
-	double *H2 = alloc_arr(n*n);
-	double *G = alloc_arr(n*n);
-	double *H1c = alloc_arr(n*n);
-	double *H2c = alloc_arr(n*n);
-	double *Gc = alloc_arr(n*n);
-	double *GcR = alloc_arr(n*n);
-	int ldh = n;
-	int ldg = n;
-
-#pragma omp parallel for simd schedule(simd:static)
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < n; i++)
-		{
-			H1[i + ldh * j] = 1.0 / (i + j + 1);
-			H2[i + ldh * j] = 1.0 / (i*i + j*j + 1);
-			H1c[i + ldh * j] = 1.0 / (i + j + 1);
-			H2c[i + ldh * j] = 1.0 / (i*i + j*j + 1);
-		}
-
-#ifdef DEBUG
-	print(n, n, H1, ldh, "H1");
-	print(n, n, H2, ldh, "H2");
-#endif
-
-	mnode *H1str, *H2str;
-	SymRecCompressStruct(n, H1c, ldh, H1str, smallsize, eps, method);
-	SymRecCompressStruct(n, H2c, ldh, H2str, smallsize, eps, method);
-
-#ifdef DEBUG
-	print(n, n, H1c, ldh, "H1c");
-	print(n, n, H2c, ldh, "H2c");
-#endif
-
-	mnode *Gstr;
-	Add_dense(n, n, alpha, H1, ldh, beta, H2, ldh, G, ldg);
-	AddStruct(n, alpha, H1str, beta, H2str, Gstr, smallsize, eps, method);
-
-#ifdef DEBUG
-	print(n, n, G, ldg, "res_dense");
-	print(n, n, Gc, ldg, "res_comp");
-#endif
-
-	SymResRestoreStruct(n, Gstr, GcR, ldg, smallsize);
-
-#ifdef DEBUG
-	print(n, n, GcR, ldg, "res_comp_restore");
-#endif
-	// |GcR - G| / |G|
-	rel_error(n, n, GcR, G, ldg, eps);
-
-	FreeNodes(n, H1str, smallsize);
-	FreeNodes(n, H2str, smallsize);
-	FreeNodes(n, Gstr, smallsize);
-	free_arr(&H1);
-	free_arr(&H2);
-	free_arr(&G);
-	free_arr(&H1c);
-	free_arr(&H2c);
-	free_arr(&Gc);
-	free_arr(&GcR);
-}
-
 void alloc_dense_node(int n, mnode* &Cstr)
 {
 	Cstr->A = alloc_arr(n * n);
@@ -977,10 +694,16 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 	double alpha_one = 1.0;
 	double beta_zero = 0.0;
 	double beta_one = 1.0;
+	int p1 = 0, p2 = 0;
+
+	if (fabs(alpha) < eps)
+	{
+		CopyStruct(n, Astr, Bstr, smallsize);
+		return;
+	}
 
 	Bstr = (mnode*)malloc(sizeof(mnode));
 
-	int p1 = 0, p2 = 0;
 	if (n <= smallsize)
 	{
 		// X = X + alpha * V * Y * VT
@@ -1062,67 +785,6 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 	}
 }
 
-// || B - B_rec || / || B ||
-void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method)
-{
-	printf("*****Test for SymCompUpdate2Struct  n = %d k = %d ***** ", n, k);
-	double alpha_one = 1.0;
-	double beta_zero = 0.0;
-	double beta_one = 1.0;
-
-	// B = H - V * Y * VT
-	double *B = alloc_arr(n * n); int ldb = n;
-	double *B_rec = alloc_arr(n * n);
-	double *Y = alloc_arr(k * k); int ldy = k;
-	double *V = alloc_arr(n * k); int ldv = n; int ldvtr = k;
-	double *HC = alloc_arr(n * n); int ldh = n;
-	double *H = alloc_arr(n * n);
-	double *C = alloc_arr(n * k); int ldc = n;
-
-	Hilbert(n, HC, ldh);
-	Hilbert(n, H, ldh);
-
-#pragma omp parallel for simd schedule(simd:static)
-	for (int i = 0; i < k; i++)
-		Y[i + ldy * i] = i + 1;
-
-#pragma omp parallel for simd schedule(simd:static)
-	for (int j = 0; j < k; j++)
-		for (int i = 0; i < n; i++)
-			V[i + ldv * j] = (i + j + 1);
-
-	// C = V * Y
-	dsymm("Right", "Up", &n, &k, &alpha_one, Y, &ldy, V, &ldv, &beta_zero, C, &ldc);
-
-	// H = H + alpha * C * VT
-	dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, H, &ldh);
-
-	mnode *HCstr;
-	// Compressed update
-	SymRecCompressStruct(n, HC, ldh, HCstr, smallsize, eps, method);
-
-	mnode *Bstr;
-	SymCompUpdate2Struct(n, k, HCstr, alpha, Y, ldy, V, ldv, Bstr, smallsize, eps, method);
-	SymResRestoreStruct(n, Bstr, B_rec, ldh, smallsize);
-
-#ifdef DEBUG
-	print(n, n, B_rec, ldb, "B_rec");
-	print(n, n, H, ldh, "H");
-#endif
-
-	// || B_rec - H || / || H ||
-	rel_error(n, n, B_rec, H, ldh, eps);
-
-	FreeNodes(n, Bstr, smallsize);
-	free_arr(&B);
-	free_arr(&B_rec);
-	free_arr(&H);
-	free_arr(&HC);
-	free_arr(&Y);
-	free_arr(&C);
-	free_arr(&V);
-}
-
 void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method)
 {
 	double alpha_one = 1.0;
@@ -1175,7 +837,6 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		SymCompRecInvStruct(n2, Astr->right, X22str, smallsize, eps, method);
 
 		// Save X22 * U to B{2,1}
-//		printf("Allocated U: %d * %d\n", n2, Bstr->p);
 		Bstr->U = alloc_arr(n2 * Bstr->p);
 		RecMultLStruct(n2, Bstr->p, X22str, Astr->U, n2, Bstr->U, n2, smallsize);
 
@@ -1194,7 +855,6 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		mkl_dimatcopy('C', 'N', n1, Bstr->p, -1.0, B12, ldb12, ldb12);
 
 		// B{1,2} = transpose(B12)
-	//	printf("Allocated VT: %d * %d\n", Bstr->p, n1);
 		Bstr->VT = alloc_arr(Bstr->p * n1);
 		Mat_Trans(n1, Bstr->p, B12, ldb12, Bstr->VT, Bstr->p);
 
@@ -1212,56 +872,6 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		free_arr(&V);
 		free_arr(&B12);
 	}
-}
-
-void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
-{
-	printf("***** Test_SymCompRecInvStruct n = %d eps = %lf ****", n, eps);
-	double *H = alloc_arr(n * n);
-	double *Hc = alloc_arr(n * n);
-	double *Bc = alloc_arr(n * n);
-	double *Brec = alloc_arr(n * n);
-	double *Y = alloc_arr(n * n);
-
-	int ldh = n;
-	int ldb = n;
-	int ldy = n;
-
-	double alpha_mone = -1.0;
-	double beta_one = 1.0;
-
-	Hilbert(n, H, ldh);
-	Hilbert(n, Hc, ldh);
-
-	// for stability
-	for (int i = 0; i < n; i++)
-	{
-		H[i + ldh * i] += 1.0;
-		Hc[i + ldh * i] += 1.0;
-	}
-
-	mnode *HCstr, *BCstr;
-	SymRecCompressStruct(n, Hc, ldh, HCstr, smallsize, eps, method);
-	SymCompRecInvStruct(n, HCstr, BCstr, smallsize, eps, method);
-	SymResRestoreStruct(n, BCstr, Brec, ldb, smallsize);
-
-	Eye(n, Y, ldy);
-
-	// Y = Y - H * Brec
-	dgemm("No", "No", &n, &n, &n, &alpha_mone, H, &ldh, Brec, &ldb, &beta_one, Y, &ldy);
-
-	double norm = dlange("Frob", &n, &n, Y, &ldy, NULL);
-
-	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
-	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
-
-	FreeNodes(n, HCstr, smallsize);
-	FreeNodes(n, BCstr, smallsize);
-	free_arr(&H);
-	free_arr(&Hc);
-	free_arr(&Bc);
-	free_arr(&Brec);
-	free_arr(&Y);
 }
 
 #if 1
@@ -1350,12 +960,7 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	int nbr = z.n; // size of D is equal to nbr blocks by n elements
 	int size = n * nbr;
 	double *DD = alloc_arr(n * n); int lddd = n;
-
-	// Set vector B
-#pragma omp parallel for schedule(dynamic)
-	for (int j = 0; j < z.n - 1; j++)
-		for (int i = 0; i < n; i++)
-			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
+	double tt;
 
 	if (compare_str(7, bench, "display"))
 	{
@@ -1364,23 +969,19 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 		printf("**********************************\n");
 	}
 
-	double tt = omp_get_wtime();
 	mnode *DCstr;
+	tt = omp_get_wtime();
 	GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
 	SymRecCompressStruct(n, DD, lddd, DCstr, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
-
-	printf("DC ranks: ");
-	PrintRanksInWidthList(DCstr);
-
 	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
 
-	tt = omp_get_wtime();
 	Gstr = (mnode**)malloc(z.n * sizeof(mnode*));
+	tt = omp_get_wtime();
 	SymCompRecInvStruct(n, DCstr, Gstr[0], smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
-
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
+
 	FreeNodes(n, DCstr, smallsize);
 	free(DD);
 
@@ -1388,6 +989,7 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	{
 		double *DD = alloc_arr(n * n); int lddd = n;
 		mnode *DCstr, *TDstr, *TD1str;
+
 		tt = omp_get_wtime();
 		GenerateDiagonal2DBlock(k, x, y, z, DD, lddd);
 		SymRecCompressStruct(n, DD, lddd, DCstr, smallsize, eps, "SVD");
@@ -1598,6 +1200,7 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 //	dlacpy("All", &size, &n, D, &ldd, DI, &lddi);
 #endif
 
+	printf("Factorization of matrix...\n");
 	tt = omp_get_wtime();
 #ifndef ONLINE
 	DirFactFastDiagStruct(x.n, y.n, z.n, D, ldd, B, Gstr, thresh, smallsize, bench);
@@ -1610,6 +1213,7 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 		printf("Total factorization time: %lf\n", tt);
 	}
 
+	printf("Solving of the system...\n");
 	tt = omp_get_wtime();
 #ifndef CSR_FORMAT
 	DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, BI, f, x_sol, thresh, smallsize);
@@ -1680,29 +1284,5 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 	free_arr(&x1);
 }
 
-void Test_CopyStruct(int n, double eps, char *method, int smallsize)
-{
-	double *H = alloc_arr(n * n); int ldh = n;
-	double *H1 = alloc_arr(n * n);
-	double *H2 = alloc_arr(n * n);
 
-	printf("***Test CopyStruct n = %d ", n);
-
-	mnode* Hstr, *Hcopy_str;
-
-	Hilbert(n, H, ldh);
-	Hilbert(n, H1, ldh);
-
-	SymRecCompressStruct(n, H, ldh, Hstr, smallsize, eps, method);
-	CopyStruct(n, Hstr, Hcopy_str, smallsize);
-	SymResRestoreStruct(n, Hcopy_str, H2, ldh, smallsize);
-
-	rel_error(n, n, H2, H1, ldh, eps);
-
-	FreeNodes(n, Hstr, smallsize);
-	FreeNodes(n, Hcopy_str, smallsize);
-	free_arr(&H2);
-	free_arr(&H1);
-	free_arr(&H);
-}
 #endif

@@ -1,5 +1,6 @@
 #include "Header.h"
 #include "templates.h"
+#include "TestSuite.h"
 
 void init(struct my_queue* &q)
 {

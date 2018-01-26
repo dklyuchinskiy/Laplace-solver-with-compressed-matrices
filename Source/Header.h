@@ -1,22 +1,24 @@
 #pragma once
 
+// C
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include <time.h>
+#include "C:\Program Files (x86)\IntelSWTools\compilers_and_libraries_2017.4.210\windows\mkl\include\mkl.h"
+
+// C++
 #include <iostream>
 #include <map>
 #include <vector>
 #include <queue>
-#include "C:\Program Files (x86)\IntelSWTools\compilers_and_libraries_2017.4.210\windows\mkl\include\mkl.h"
-//#include "C:\Program Files (x86)\IntelSWTools\compilers_and_libraries_2017.4.210\windows\mkl\include\mkl_feast_evcount.h"
+
 using namespace std;
 
-#include <time.h>
+#define PROBLEM 1
 
-#define PROBLEM 2
-
-#if (PROBLEM == 2)
+#if (PROBLEM == 1)
 #define TEST 1
 #endif
 
@@ -84,8 +86,7 @@ typedef struct list qlist;
 #define CSR_FORMAT
 #define STRUCT
 #define ONLINE
-
-#include "templates.h"
+//#define LARGE_SUITE
 
 #define PI 3.141592653589793238462643
 

@@ -27,28 +27,6 @@ void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, dou
 void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 	/* output */ double *D, int ldd, double *B, double *x1, double *f, double thresh);
 
-// Tests
-void Test_SymRecCompress(int n, double eps, char *method, int smallsize);
-void Test_DiagMult(int n, double eps, char *method, int smallsize);
-void Test_RecMultL(int n, int k, double eps, char *method, int smallsize);
-void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char *method);
-void Test_LowRankApprox(int m, int n, double eps, char *method);
-void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, char* method);
-void Test_SymCompRecInv(int n, int smallsize, double eps, char *method);
-void Test_Transpose(int m, int n, int smallsize, double eps, char *method);
-
-// Tests - BinaryTrees
-void Test_LowRankApproxStruct(int m, int n, double eps, char *method);
-void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize);
-void Test_DiagMultStruct(int n, double eps, char *method, int smallsize);
-void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize);
-void Test_CopyStruct(int n, double eps, char *method, int smallsize);
-void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps, char *method);
-void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method);
-void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method);
-void Test_QueueList(int n, double eps, char* method, int smallsize);
-void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps);
-void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh);
 
 // Support
 
@@ -56,13 +34,13 @@ double* alloc_arr(int n);
 double random(double min, double max);
 double F_ex(double x, double y, double z);
 double u_ex(double x, double y, double z);
+double rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps);
 
 void free_arr(double* *arr);
 void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr);
 void Hilbert(int n, double *H, int ldh);
 void op_mat(int n1, int n, double *Y11, double *Y12, int ldy, char sign);
 void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, double *B, int ldb, double *C, int ldc);
-void rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps);
 void Resid(int n1, int n2, int n3, double *D, int ldd, double *B, double *x, double *f, double *g, double &RelRes);
 void print_map(const map<vector<int>, double>& SD);
 void Eye(int n, double *H, int ldh);
