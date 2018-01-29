@@ -1,4 +1,4 @@
-#include "Header.h"
+#include "definitions.h"
 #include "templates.h"
 #include "TestSuite.h"
 
@@ -8,7 +8,6 @@ int main()
 {
 	TestAll();
 
-#if (PROBLEM == 1)
 	int n1 = 39; // number of point across the directions
 	int n2 = 39;
 	int n3 = 39;
@@ -214,53 +213,6 @@ int main()
 	free_arr(&x_sol);
 	free_arr(&f);
 
-#elif (PROBLEM == 2)
-	
-	node *root1 = NULL;
-	node *root2 = NULL;
-
-	root1 = insert1(root1, 5);
-	root2 = insert1(root2, 5);
-	insert2(&root2, 7);
-	insert2(&root2, 3);
-	insert2(&root2, 2);
-	insert2(&root2, 8);
-	insert2(&root2, 4);
-	insert2(&root2, 1);
-	insert2(&root2, 6);
-	insert2(&root2, 9);
-
-//	cout << "val1 = " << root1->val << endl;
-	cout << "val2 = " << root2->val << endl;
-
-	printf("size = %d\n", TreeSize(root2));
-	printf("maxDepth = %d\n", MaxDepth(root2));
-	printf("minValue = %d\n", MinValue(root2));
-	printf("maxValue = %d\n", MaxValue(root2));
-	PrintInorder(root2);
-	printf("\n");
-	PrintPostorder(root2);
-	printf("\n");
-	printf("IsBST = %d\n", IsBST(root2));
-
-
-/*
-//	bool is_node;
-	is_node = lookup(root2, 3);
-	cout << is_node << endl;
-	is_node = lookup(root2, 5);
-	cout << is_node << endl;*/
-#elif (PROBLEM == 3)
-	
-	int m = 10;
-	int n = 10;
-	double eps = 1e-06;
-	char method[255] = "SVD";
-	int smallsize = 3;
-
-	Test_QueueList(n, eps, method, smallsize);
-
-#endif
 	system("pause");
 
 	return 0;

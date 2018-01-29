@@ -11,25 +11,19 @@
 // C++
 #include <iostream>
 #include <map>
-#include <vector>
 #include <queue>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-using namespace std;
 
-#define PROBLEM 1
-
-#if (PROBLEM == 1)
 #define TEST 1
-#endif
-
 
 #define N 10
 
 //#define DEBUG
-
-#if (PROBLEM == 6)
-//#define DEBUG
-#endif
 
 #define TEST_IT 10
 
@@ -42,14 +36,6 @@ struct size_m {
 	int n;
 	double h;
 };
-
-struct BinaryTreeNode {
-	int val;
-	struct BinaryTreeNode *left;
-	struct BinaryTreeNode *right;
-};
-
-typedef struct BinaryTreeNode node;
 
 struct BinaryMatrixTreeNode {
 
@@ -86,7 +72,6 @@ typedef struct list qlist;
 #define CSR_FORMAT
 #define STRUCT
 #define ONLINE
-//#define LARGE_SUITE
 
 #define PI 3.141592653589793238462643
 

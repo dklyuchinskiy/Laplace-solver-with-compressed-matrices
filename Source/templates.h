@@ -1,3 +1,7 @@
+#pragma once
+
+using namespace std;
+
 // HSS
 
 void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
@@ -64,24 +68,13 @@ void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda,
 
 // BinaryTrees.cpp
 
-node* AllocNewNode1(int value);
-node* insert1(node* root, int value);
-int MinValue(node* root);
-int MaxValue(node* root);
-void AllocNewNode2(node* Node, int value);
-void insert2(node* *root, int value); // передаем дерево по указателю
-void PrintInorder(node* root);
-void PrintPostorder(node *root);
-void FreeNodes(int n, mnode* &Astr, int smallsize);
-void alloc_dense_node(int n, mnode* &Cstr);
-void CopyStruct(int n, mnode* Gstr, mnode* &TD1str, int smallsize);
-bool IsBST(node *root);
-bool lookup(node *node, int value);
-
 int TreeSize(mnode* root);
 int MaxDepth(mnode* Node);
 void PrintRanks(mnode* root);
 void PrintRanksInWidth(mnode *root);
+void CopyStruct(int n, mnode* Gstr, mnode* &TD1str, int smallsize);
+void FreeNodes(int n, mnode* &Astr, int smallsize);
+void alloc_dense_node(int n, mnode* &Cstr);
 
  // BinaryTrees - Solver
 

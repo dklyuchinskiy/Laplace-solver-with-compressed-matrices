@@ -1,6 +1,7 @@
-#include "Header.h"
+#include "definitions.h"
 #include "templates.h"
-#include "TestSuite.h"
+
+using namespace std;
 
 // ---------- Compressed matrices --------------
 
@@ -831,6 +832,21 @@ void Add(int n, double alpha, double *A, int lda, double beta, double *B, int ld
 {
 	double alpha_loc = 1.0;
 	double beta_loc = 0.0;
+
+	if (fabs(alpha) < eps)
+	{
+		dlacpy("All", &n, &n, B, &ldb, C, &ldc);
+		return;
+	}
+	else if (fabs(beta) < eps)
+	{
+		dlacpy("All", &n, &n, A, &lda, C, &ldc);
+		return;
+	}
+	else if (fabs(alpha) < eps && fabs(beta) < eps)
+	{
+		return;
+	}
 
 #ifdef DEBUG
 	printf("******Function: Add*******\n");

@@ -1,81 +1,9 @@
-#include "Header.h"
+#include "definitions.h"
 #include "templates.h"
 #include "TestSuite.h"
 
-bool lookup(node *node, int value)
-{
-	if (node == NULL)
-	{
-		return false;
-	}
-	else
-	{
-		if (node->val == value) return true;
-		else if (node->val < value) return lookup(node->left, value);
-		else return lookup(node->right, value);
-	}
-}
 
-node* AllocNewNode1(int value)
-{
-	node* Node = (node*)malloc(sizeof(node));
-	Node->val = value;
-	Node->left = NULL;
-	Node->right = NULL;
-
-	return Node; // return a pointer to the allocated memory inside this function
-}
-
-void AllocNewNode2(node* Node, int value)
-{
-	Node->val = value;
-	Node->left = NULL;
-	Node->right = NULL;
-}
-
-
-/*
-Give a binary search tree and a number, inserts a new node
-with the given number in the correct place in the tree.
-Returns the new root pointer which the caller should
-then use (the standard trick to avoid using reference
-parameters).
-*/
-
-node* insert1(node* root, int value)
-{
-
-	if (root == NULL)
-	{
-		// этот указатель на память существует внутри функции локально, поэтому его нужно вернуть
-		root = AllocNewNode1(value); // положили память в root
-		//cout << "root val1 inside = " << root->val << endl;
-	}
-	else
-	{
-		if (value <= root->val) root->left = insert1(root->left, value);
-		else root->right = insert1(root->right, value);
-
-	}
-
-	return root; // возвращаем память на root (перемещаем память, аллоцированную внутри функции за пределы функции)
-}
-
-void insert2(node* *root, int value)
-{
-	if (*root == NULL)
-	{
-		// этот указатель на root передан нам по указателю, можем изменять его внутри функции
-		*root = AllocNewNode1(value); // положили память в root
-		//cout << "root val2 inside = " << (*root)->val << endl;
-	}
-	else
-	{
-		if (value <= (*root)->val) insert2(&(*root)->left, value);
-		else insert2(&(*root)->right, value);
-
-	}
-}
+// ---------- Compressed matrices --------------
 
 // This problem demonstrates simple binary tree traversal.Given a binary tree, count the number of nodes in the tree.
 // recursive function
@@ -111,134 +39,6 @@ int MaxDepth(mnode* root)
 	}
 
 }
-
-/* Given a non - empty binary search tree(an ordered binary tree), return the minimum data value found in that tree.
-It is not necessary to search the entire tree. A maxValue() function is structurally very similar to this
-function. */
-
-int MinValue(node* root)
-{
-	// we need to find left most leaf
-#if 0
-	if (root->left == NULL)
-	{
-		return root->val;
-	}
-	else
-	{
-		return MinValue(root->left);
-	}
-#else
-	node* cur = root; // put a pointer to the head of the tree
-	while (cur->left != NULL) /* goes throught the tree*/
-	{
-		cur = cur->left;
-	}
-	return cur->val;
-#endif
-}
-
-int MaxValue(node* root)
-{
-	// we need to find left most leaf
-#if 0
-	if (root->right == NULL)
-	{
-		return root->val;
-	}
-	else
-	{
-		return MaxValue(root->right);
-	}
-#else
-	node* cur = root; // put a pointer to the head of the tree
-	while (cur->right != NULL) /* goes throught the tree*/
-	{
-		cur = cur->right;
-	}
-	return cur->val;
-#endif
-}
-
-
-/* in*/
-void PrintInorder(node* root)
-{
-	if (root == NULL)
-	{
-		return;
-	}
-	else
-	{
-		PrintInorder(root->left);
-		printf("%d ", root->val);
-		PrintInorder(root->right);
-	}
-
-}
-
-void PrintPostorder(node *root)
-{
-	if (root == NULL)
-	{
-		return;
-	}
-	else
-	{
-		PrintPostorder(root->left);
-		PrintPostorder(root->right);
-		printf("%d ", root->val);
-	}
-}
-
-bool IsBST(node *root)
-{
-	if (root == NULL)
-	{
-		return true;
-	}
-
-	if (root->left != NULL && MinValue(root->left) > root->val)
-		return false;
-
-	if (root->right != NULL && MaxValue(root->right) <= root->val)
-		return false;
-
-	if (!IsBST(root->left) || !IsBST(root->right))
-		return false;
-
-	return true;
-
-}
-
-// ---------- Compressed matrices --------------
-#if 0
-mnode* AllocNewMatrixLeaf(int n1, int n2)
-{
-	mnode* Node = (mnode*)malloc(sizeof(mnode)); // allocated memory for pointers only
-	Node->A11 = (double*)malloc(sizeof(n1 * n1));
-	Node->A22 = (double*)malloc(sizeof(n2 * n2));
-	Node->U = NULL;
-	Node->VT = NULL;
-	Node->left = NULL;
-	Node->right = NULL;
-
-	return Node;
-}
-
-mnode* AllocNewMatrixNode(int n1, int n2)
-{
-	mnode* Node = (mnode*)malloc(sizeof(mnode)); // allocated memory for pointers only
-	Node->U = (double*)malloc(sizeof(n2 * n1));
-	Node->VT = (double*)malloc(sizeof(n1 * n2));
-	Node->A11 = NULL;
-	Node->A22 = NULL;
-	Node->left = NULL;
-	Node->right = NULL;
-
-	return Node;
-}
-#endif
 
 void PrintRanks(mnode* root)
 {
@@ -961,6 +761,7 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	int size = n * nbr;
 	double *DD = alloc_arr(n * n); int lddd = n;
 	double tt;
+	//TestRunner test;
 
 	if (compare_str(7, bench, "display"))
 	{
@@ -982,6 +783,10 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
 
+	printf("Block %d. ", 0);
+	Test_RankEqual(DCstr, Gstr[0]);
+	printf("\n");
+
 	FreeNodes(n, DCstr, smallsize);
 	free(DD);
 
@@ -989,6 +794,8 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	{
 		double *DD = alloc_arr(n * n); int lddd = n;
 		mnode *DCstr, *TDstr, *TD1str;
+
+		printf("Block %d. ", k);
 
 		tt = omp_get_wtime();
 		GenerateDiagonal2DBlock(k, x, y, z, DD, lddd);
@@ -998,21 +805,30 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 
 		tt = omp_get_wtime();
 		CopyStruct(n, Gstr[k - 1], TD1str, smallsize);
+		Test_RankEqual(Gstr[k - 1], TD1str);
 
 		DiagMultStruct(n, TD1str, &B[ind(k - 1, n)], smallsize);
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf\n", k, tt);
+		Test_RankEqual(Gstr[k - 1], TD1str);
 
 		tt = omp_get_wtime();
 		AddStruct(n, 1.0, DCstr, -1.0, TD1str, TDstr, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Add %d time: %lf\n", k, tt);
 
+		Test_RankAdd(DCstr, TD1str, TDstr);
+
 		tt = omp_get_wtime();
 		SymCompRecInvStruct(n, TDstr, Gstr[k], smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf\n", k, tt);
 		if (compare_str(7, bench, "display")) printf("\n");
+
+		Test_RankEqual(TDstr, Gstr[k]);
+		printf("\n");
+
+
 
 		FreeNodes(n, DCstr, smallsize);
 		FreeNodes(n, TDstr, smallsize);

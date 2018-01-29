@@ -1,4 +1,4 @@
-#include "Header.h"
+#include "definitions.h"
 #include "templates.h"
 #include "TestSuite.h"
 #include "TestFramework.h"
@@ -11,19 +11,24 @@ void TestAll()
 
 	printf("***** TEST LIBRARY FUNCTIONS *******\n");
 
-	runner.RunTest(&Shell_LowRankApprox, "Test_LowRankApprox");
-	runner.RunTest(&Shell_SymRecCompress, "Test_SymRecCompress"); // передаем в run_test указатель на функцию - ее имя
-	runner.RunTest(&Shell_DiagMult, "Test_DiagMult");
-	runner.RunTest(&Shell_RecMultL, "Test_RecMultL");
-	runner.RunTest(&Shell_Add, "Test_Add");
-	runner.RunTest(&Shell_SymCompUpdate2, "Test_SymComUpdate2");
-	runner.RunTest(&Shell_LowRankApproxTranspose, "Test_LowRankApproxTranspose");
-	runner.RunTest(&Shell_CopyStruct, "Test_CopyStruct");
+	runner.RunTests(Shell_LowRankApprox, Test_LowRankApprox, Test_LowRankApproxStruct, "Test_LowRankApprox");
+	runner.RunTests(Shell_SymRecCompress, Test_SymRecCompress, Test_SymRecCompressStruct, "Test_SymRecCompress");
+	runner.RunTests(Shell_DiagMult, Test_DiagMult, Test_DiagMultStruct, "Test_DiagMult");
+	runner.RunTests(Shell_RecMultL, Test_RecMultL, Test_RecMultLStruct, "Test_RecMultL");
+	runner.RunTests(Shell_Add, Test_Add, Test_AddStruct, "Test_Add");
+	runner.RunTests(Shell_SymCompUpdate2, Test_SymCompUpdate2, Test_SymCompUpdate2Struct, "Test_SymCompUpdate2");
+	runner.RunTests(Shell_SymCompRecInv, Test_SymCompRecInv, Test_SymCompRecInvStruct, "Test_SymCompRecInv");
+	runner.RunTest(Shell_CopyStruct, Test_CopyStruct,  "Test_CopyStruct");
+	runner.RunTest(Shell_LowRankApproxTranspose, Test_LowRankApproxTranspose, "Test_LowRankApproxTranspose");
+
+	printf("********************\n");
+	printf("ALL TESTS: %d\nPASSED: %d \nFAILED: %d\n", runner.GetAll(), runner.GetPassed(), runner.GetFailed());
 
 	printf("***** THE END OF TESTING*******\n\n");
+
 }
 
-void Shell_LowRankApprox(int& numb)
+void Shell_LowRankApprox(ptr_test_low_rank func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 
@@ -31,123 +36,133 @@ void Shell_LowRankApprox(int& numb)
 		for (int m = 3; m <= 10; m++)
 			for (int n = 1; n <= 10; n++)
 			{
-				Test_LowRankApprox(m, n, eps, method);
-				numb++;
+				try
+				{
+					numb++;
+					func(m, n, eps, method);
+				}
+				catch (runtime_error& e)
+				{
+					++fail_count;
+					cerr << test_name << " fail: " << e.what() << endl;
+				}
+				catch (...) {
+					++fail_count;
+					cerr << "Unknown exception caught" << endl;
+				}
 			}
+}
 
-	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		for (int m = 3; m <= 10; m++)
-			for (int n = 1; n <= 10; n++)
+void Shell_SymRecCompress(ptr_test_sym_rec_compress func, const string& test_name, int &numb, int &fail_count)
+{
+	char method[255] = "SVD";
+	int smallsize = 3;
+
+	for (int n = 3; n <= 10; n++)
+		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
+		{
+			try
 			{
-				Test_LowRankApproxStruct(m, n, eps, method);
 				numb++;
+				func(n, eps, method, smallsize);
 			}
-}
-
-void Shell_SymRecCompress(int& numb)
-{
-	char method[255] = "SVD";
-	int smallsize = 3;
-	numb = 0;
-
-	for (int n = 3; n <= 10; n++)
-		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		{
-			Test_SymRecCompress(n, eps, method, smallsize);
-			numb++;
-		}
-
-	for (int n = 3; n <= 10; n++)
-		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		{
-			Test_SymRecCompressStruct(n, eps, method, smallsize);
-			numb++;
+			catch (runtime_error& e)
+			{
+				++fail_count;
+				cerr << test_name << " fail: " << e.what() << endl;
+			}
+			catch (...) {
+				++fail_count;
+				cerr << "Unknown exception caught" << endl;
+			}
 		}
 }
 
-void Shell_DiagMult(int &numb)
+void Shell_DiagMult(ptr_test_sym_rec_compress func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
-	numb = 0;
-
-	// Test compress relative error of Hd and H2
-	for (int n = 3; n <= 10; n++)
-		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		{
-			Test_DiagMult(n, eps, method, smallsize);
-			numb++;
-		}
 
 	for (int n = 3; n <= 10; n++)
 		for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		{
-			Test_DiagMultStruct(n, eps, method, smallsize);
-			numb++;
+			try
+			{
+				numb++;
+				func(n, eps, method, smallsize);
+			}
+			catch (runtime_error& e)
+			{
+				++fail_count;
+				cerr << test_name << " fail: " << e.what() << endl;
+			}
+			catch (...) {
+				++fail_count;
+				cerr << "Unknown exception caught" << endl;
+			}
 		}
+
 }
 
-void Shell_RecMultL(int &numb)
+void Shell_RecMultL(ptr_test_mult_diag func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
-	numb = 0;
 
-	// Test compress relative error of Y1(recovered) and Y (init)
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 			for (int k = 1; k <= 10; k++)
 			{
-				Test_RecMultL(n, k, eps, method, smallsize);
-				numb++;
+				try
+				{
+					numb++;
+					func(n, k, eps, method, smallsize);
+				}
+				catch (runtime_error& e)
+				{
+					++fail_count;
+					cerr << test_name << " fail: " << e.what() << endl;
+				}
+				catch (...) {
+					++fail_count;
+					cerr << "Unknown exception caught" << endl;
+				}
 			}
 
-	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		for (int n = 3; n <= 10; n++)
-			for (int k = 1; k <= 10; k++)
-			{
-				Test_RecMultLStruct(n, k, eps, method, smallsize);
-				numb++;
-			}
 }
 
-void Shell_Add(int &numb)
+
+void Shell_Add(ptr_test_add func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
 
-	for (int alpha = -10; alpha < 10; alpha += 2)
-		for (int beta = -10; beta < 10; beta += 2)
-			for (int n = 3; n <= 10; n++)
-				for (double eps = 1e-4; eps > 1e-9; eps /= 10)
+	for (double eps = 1e-4; eps > 1e-9; eps /= 10)
+		for (int n = 3; n <= 10; n++)
+			for (int alpha = -10; alpha < 10; alpha += 2)
+				for (int beta = -10; beta < 10; beta += 2)
 				{
-					Test_Add(n, alpha, beta, smallsize, eps, method);
-					numb++;
+					if (alpha != 0 && beta != 0)
+					{
+						try
+						{
+							numb++;
+							func(n, alpha, beta, eps, method, smallsize);
+						}
+						catch (runtime_error& e)
+						{
+							++fail_count;
+							cerr << test_name << " fail: " << e.what() << endl;
+						}
+						catch (...) {
+							++fail_count;
+							cerr << "Unknown exception caught" << endl;
+						}
+					}
 				}
-
-	for (double alpha = -10; alpha < 10; alpha += 2)
-		for (double beta = -10; beta < 10; beta += 2)
-			for (int n = 3; n <= 10; n++)
-				for (double eps = 1e-4; eps > 1e-9; eps /= 10)
-				{
-					Test_AddStruct(n, alpha, beta, smallsize, eps, method);
-					numb++;
-				}
-
-#ifdef LARGE_SUITE
-	double alpha = -6.5;
-	double beta = 3.5;
-
-	for (double eps = 1e-2; eps > 1e-9; eps /= 100)
-			for (int n = 200; n < 1500; n += 200)
-			{
-				Test_AddStruct(n, alpha, beta, smallsize, eps, method);
-				numb++;
-			}
-#endif
 }
 
-void Shell_SymCompUpdate2(int &numb)
+void Shell_SymCompUpdate2(ptr_test_update func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
@@ -157,33 +172,24 @@ void Shell_SymCompUpdate2(int &numb)
 			for (int n = 3; n <= 10; n++)
 				for (int k = 1; k <= 10; k++)
 				{
-					Test_SymCompUpdate2(n, k, alpha, smallsize, eps, method);
-					numb++;
+					try
+					{
+						numb++;
+						func(n, k, alpha, eps, method, smallsize);
+					}
+					catch (runtime_error& e)
+					{
+						++fail_count;
+						cerr << test_name << " fail: " << e.what() << endl;
+					}
+					catch (...) {
+						++fail_count;
+						cerr << "Unknown exception caught" << endl;
+					}
 				}
-
-	for (double eps = 1e-3; eps > 1e-9; eps /= 10)
-		for (double alpha = -10; alpha < 10; alpha += 2)
-			for (int n = 3; n <= 10; n++)
-				for (int k = 1; k <= 10; k++)
-				{
-					Test_SymCompUpdate2Struct(n, k, alpha, smallsize, eps, method);
-					numb++;
-				}
-
-#ifdef LARGE_SUITE
-	double alpha = -6.5;
-	int k = 200;
-
-	for (double eps = 1e-2; eps > 1e-9; eps /= 100)
-			for (int n = 200; n < 1500; n += 200)
-			{
-				Test_SymCompUpdate2Struct(n, k, alpha, smallsize, eps, method);
-				numb++;
-			}
-#endif
 }
 
-void Shell_SymCompRecInv(int &numb)
+void Shell_SymCompRecInv(ptr_test_sym_rec_compress func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
@@ -191,28 +197,25 @@ void Shell_SymCompRecInv(int &numb)
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 		{
-			Test_SymCompRecInv(n, smallsize, eps, method);
-			numb++;
+			try
+			{
+				numb++;
+				func(n, eps, method, smallsize);
+			}
+			catch (runtime_error& e)
+			{
+				++fail_count;
+				cerr << test_name << " fail: " << e.what() << endl;
+			}
+			catch (...) {
+				++fail_count;
+				cerr << "Unknown exception caught" << endl;
+			}
 		}
 
-	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
-		for (int n = 3; n <= 10; n++)
-		{
-			Test_SymCompRecInvStruct(n, smallsize, eps, method);
-			numb++;
-		}
-
-#ifdef LARGE_SUITE
-	for (double eps = 1e-2; eps > 1e-9; eps /= 100)
-		for (int n = 200; n < 1500; n += 200)
-		{
-			Test_SymCompRecInvStruct(n, smallsize, eps, method);
-			numb++;
-		}
-#endif
 }
 
-void Shell_LowRankApproxTranspose(int &numb)
+void Shell_LowRankApproxTranspose(ptr_test_mult_diag func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
@@ -221,12 +224,24 @@ void Shell_LowRankApproxTranspose(int &numb)
 		for (int n = 3; n <= 10; n++)
 			for (int m = 2; m <= 10; m++)
 			{
-				Test_LowRankApproxTranspose(m, n, smallsize, eps, method);
-				numb++;
+				try
+				{
+					numb++;
+					func(m, n, eps, method, smallsize);
+				}
+				catch (runtime_error& e)
+				{
+					++fail_count;
+					cerr << test_name << " fail: " << e.what() << endl;
+				}
+				catch (...) {
+					++fail_count;
+					cerr << "Unknown exception caught" << endl;
+				}
 			}
 }
 
-void Shell_CopyStruct(int &numb)
+void Shell_CopyStruct(ptr_test_sym_rec_compress func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
 	int smallsize = 3;
@@ -234,10 +249,23 @@ void Shell_CopyStruct(int &numb)
 	for (double eps = 1e-2; eps > 1e-8; eps /= 10)
 		for (int n = 3; n <= 10; n++)
 		{
-			Test_CopyStruct(n, eps, method, smallsize);
-			numb++;
+			try
+			{
+				numb++;
+				func(n, eps, method, smallsize);
+			}
+			catch (runtime_error& e)
+			{
+				++fail_count;
+				cerr << test_name << " fail: " << e.what() << endl;
+			}
+			catch (...) {
+				++fail_count;
+				cerr << "Unknown exception caught" << endl;
+			}
 		}
 }
+
 
 void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 {
@@ -245,13 +273,9 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 	char frob = 'F';
 	double norm = 0;
 
-	double *H = new double[n*n]; // init
-	double *H1 = new double[n*n]; // compressed
-	double *H2 = new double[n*n]; // recovered init
-
-	H[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
+	double *H = alloc_arr(n * n); // init
+	double *H1 = alloc_arr(n * n); // compressed
+	double *H2 = alloc_arr(n * n); // recovered init
 
 	int ldh = n;
 	for (int j = 0; j < n; j++)
@@ -272,23 +296,12 @@ void Test_SymRecCompress(int n, double eps, char *method, int smallsize)
 #endif
 
 	// Norm of residual || A - L * U ||
-	for (int j = 0; j < n; j++)
-	{
-		for (int i = 0; i < n; i++)
-		{
-			H2[i + ldh * j] = H2[i + ldh * j] - H[i + ldh * j];
-		}
-	}
+	norm = rel_error(n, n, H2, H, ldh, eps);
 
 #ifdef DEBUG
 	print(n, n, H, ldh, "H init");
 	print(n, n, H2, ldh, "diff");
 #endif
-
-	norm = dlange(&frob, &n, &n, H2, &ldh, NULL);
-	norm = norm / dlange(&frob, &n, &n, H, &ldh, NULL);
-//	if (norm < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", norm, eps);
-//	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
 
 	char str[255];
 	sprintf(str, "Simple: n = %d ", n);
@@ -305,13 +318,9 @@ void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
 	char frob = 'F';
 	double norm = 0;
 
-	double *H = new double[n*n]; // init
-	double *H1 = new double[n*n]; // compressed
-	double *H2 = new double[n*n]; // recovered init
-
-	H[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
+	double *H = alloc_arr(n * n); // init
+	double *H1 = alloc_arr(n * n); // compressed
+	double *H2 = alloc_arr(n * n); // recovered init
 
 	int ldh = n;
 	for (int j = 0; j < n; j++)
@@ -355,15 +364,11 @@ void Test_SymRecCompressStruct(int n, double eps, char *method, int smallsize)
 void Test_DiagMult(int n, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for DiagMult  n = %d \n******* ", n);
-	double *Hd = alloc_arr(n*n); // diagonal Hd = D * H * D
-	double *H1 = alloc_arr(n*n); // compressed H
-	double *H2 = alloc_arr(n*n); // recovered H after D * H1 * D
+	double *Hd = alloc_arr(n * n); // diagonal Hd = D * H * D
+	double *H1 = alloc_arr(n * n); // compressed H
+	double *H2 = alloc_arr(n * n); // recovered H after D * H1 * D
 	double *d = alloc_arr(n);
 	char str[255];
-
-	Hd[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
 
 	double norm = 0;
 	int ldh = n;
@@ -413,15 +418,11 @@ void Test_DiagMult(int n, double eps, char *method, int smallsize)
 void Test_DiagMultStruct(int n, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for DiagMultStruct  n = %d ******* ", n);
-	double *Hd = alloc_arr(n*n); // diagonal Hd = D * H * D
-	double *H1 = alloc_arr(n*n); // compressed H
-	double *H2 = alloc_arr(n*n); // recovered H after D * H1 * D
+	double *Hd = alloc_arr(n * n); // diagonal Hd = D * H * D
+	double *H1 = alloc_arr(n * n); // compressed H
+	double *H2 = alloc_arr(n * n); // recovered H after D * H1 * D
 	double *d = alloc_arr(n);
 	char str[255];
-
-	Hd[0:n*n] = 0;
-	H1[0:n*n] = 0;
-	H2[0:n*n] = 0;
 
 	double norm = 0;
 	int ldh = n;
@@ -476,10 +477,10 @@ void Test_DiagMultStruct(int n, double eps, char *method, int smallsize)
 void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for RecMultL  n = %d k = %d ******* ", n, k);
-	double *H = new double[n*n]; // init and compressed
-	double *X = new double[n*k];
-	double *Y = new double[n*k]; // init Y
-	double *Y1 = new double[n*k]; // after multiplication woth compressed
+	double *H = alloc_arr(n * n); // init and compressed
+	double *X = alloc_arr(n * k);
+	double *Y = alloc_arr(n * k); // init Y
+	double *Y1 = alloc_arr(n * k); // after multiplication woth compressed
 	char str[255];
 
 	double norm = 0;
@@ -489,11 +490,6 @@ void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 	int ldh = n;
 	int ldy = n;
 	int ldx = n;
-
-	H[0:n*n] = 0;
-	X[0:n*k] = 0;
-	Y[0:n*k] = 0;
-	Y1[0:n*k] = 0;
 
 	for (int i = 0; i < n; i++)
 	{
@@ -529,6 +525,11 @@ void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 	print(n, n, H, ldy, "H comp");
 	print(n, k, Y1, ldy, "Y1 rec");
 #endif
+
+	free_arr(&H);
+	free_arr(&X);
+	free_arr(&Y);
+	free_arr(&Y1);
 }
 
 /* Тест на сравнение результатов умножения Y = H * X сжимаемой матрицы H на произвольную X.
@@ -536,11 +537,12 @@ void Test_RecMultL(int n, int k, double eps, char *method, int smallsize)
 void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for RecMultLStruct  n = %d k = %d ******* ", n, k);
-	double *H = new double[n*n]; // init and compressed
-	double *X = new double[n*k];
-	double *Y = new double[n*k]; // init Y
-	double *Y1 = new double[n*k]; // after multiplication woth compressed
+	double *H = alloc_arr(n * n); // init and compressed
+	double *X = alloc_arr(n * k);
+	double *Y = alloc_arr(n * k); // init Y
+	double *Y1 = alloc_arr(n * k); // after multiplication woth compressed
 	char str[255];
+
 	double norm = 0;
 	double alpha = 1.0;
 	double beta = 0.0;
@@ -548,11 +550,6 @@ void Test_RecMultLStruct(int n, int k, double eps, char *method, int smallsize)
 	int ldh = n;
 	int ldy = n;
 	int ldx = n;
-
-	H[0:n*n] = 0;
-	X[0:n*k] = 0;
-	Y[0:n*k] = 0;
-	Y1[0:n*k] = 0;
 
 	for (int i = 0; i < n; i++)
 	{
@@ -605,7 +602,6 @@ void Test_LowRankApprox(int m, int n, double eps, char *method)
 	double *A_init = alloc_arr(m * n);
 	double *A_rec = alloc_arr(m * n);
 	double *VT;
-
 	char str[255];
 
 	int mn = min(m, n);
@@ -635,6 +631,11 @@ void Test_LowRankApprox(int m, int n, double eps, char *method)
 	norm = rel_error(m, n, A_rec, A_init, lda, eps);
 	sprintf(str, "Simple: n = %d m = %d ", n, m);
 	AssertLess(norm, eps, str);
+
+	free_arr(&A);
+	free_arr(&A_init);
+	free_arr(&A_rec);
+	free_arr(&VT);
 
 }
 
@@ -685,17 +686,18 @@ void Test_LowRankApproxStruct(int m, int n, double eps, char *method)
 	free(Astr);
 }
 
-void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char *method)
+void Test_Add(int n, double alpha, double beta, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for Add n = %d ******* ", n);
-	double *H1 = alloc_arr(n*n);
-	double *H2 = alloc_arr(n*n);
-	double *G = alloc_arr(n*n);
-	double *H1c = alloc_arr(n*n);
-	double *H2c = alloc_arr(n*n);
-	double *Gc = alloc_arr(n*n);
-	double *GcR = alloc_arr(n*n);
+	double *H1 = alloc_arr(n * n);
+	double *H2 = alloc_arr(n * n);
+	double *G = alloc_arr(n * n);
+	double *H1c = alloc_arr(n * n);
+	double *H2c = alloc_arr(n * n);
+	double *Gc = alloc_arr(n * n);
+	double *GcR = alloc_arr(n * n);
 	char str[255];
+
 	int ldh = n;
 	int ldg = n;
 	double norm = 0;
@@ -737,7 +739,8 @@ void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char 
 #endif
 	// |GcR - G| / |G|
 	norm = rel_error(n, n, GcR, G, ldg, eps);
-	sprintf(str, "Simple: n = %d n = %d alpha = %lf beta = %lf", n, n, alpha, beta);
+
+	sprintf(str, "Simple: n = %d n = %d alpha = %d beta = %d", n, n, alpha, beta);
 	AssertLess(norm, eps, str);
 
 	free_arr(&H1);
@@ -749,17 +752,18 @@ void Test_Add(int n, double alpha, double beta, int smallsize, double eps, char 
 	free_arr(&GcR);
 }
 
-void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps, char *method)
+void Test_AddStruct(int n, double alpha, double beta, double eps, char *method, int smallsize)
 {
 	//printf("*****Test for Add n = %d ******* ", n);
-	double *H1 = alloc_arr(n*n);
-	double *H2 = alloc_arr(n*n);
-	double *G = alloc_arr(n*n);
-	double *H1c = alloc_arr(n*n);
-	double *H2c = alloc_arr(n*n);
-	double *Gc = alloc_arr(n*n);
-	double *GcR = alloc_arr(n*n);
+	double *H1 = alloc_arr(n * n);
+	double *H2 = alloc_arr(n * n);
+	double *G = alloc_arr(n * n);
+	double *H1c = alloc_arr(n * n);
+	double *H2c = alloc_arr(n * n);
+	double *Gc = alloc_arr(n * n);
+	double *GcR = alloc_arr(n * n);
 	char str[255];
+
 	int ldh = n;
 	int ldg = n;
 	double norm = 0;
@@ -819,16 +823,10 @@ void Test_AddStruct(int n, double alpha, double beta, int smallsize, double eps,
 	free_arr(&GcR);
 }
 
-// || B - B_rec || / || B ||
-void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, char* method)
+// B = H - V * Y * VT
+void Test_SymCompUpdate2(int n, int k, double alpha, double eps, char* method, int smallsize)
 {
 //	printf("*****Test for SymCompUpdate2   n = %d k = %d ***** ", n, k);
-	double alpha_one = 1.0;
-	double beta_zero = 0.0;
-	double beta_one = 1.0;
-	double norm = 0;
-
-	// B = H - V * Y * VT
 	double *B = alloc_arr(n * n); int ldb = n;
 	double *B_rec = alloc_arr(n * n);
 	double *Y = alloc_arr(k * k); int ldy = k;
@@ -837,6 +835,11 @@ void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, 
 	double *H = alloc_arr(n * n);
 	double *C = alloc_arr(n * k); int ldc = n;
 	char str[255];
+
+	double alpha_one = 1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+	double norm = 0;
 
 	Hilbert(n, HC, ldh);
 	Hilbert(n, H, ldh);
@@ -880,16 +883,10 @@ void Test_SymCompUpdate2(int n, int k, double alpha, int smallsize, double eps, 
 	free_arr(&V);
 }
 
-// || B - B_rec || / || B ||
-void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double eps, char* method)
+// B = H - V * Y * VT
+void Test_SymCompUpdate2Struct(int n, int k, double alpha, double eps, char* method, int smallsize)
 {
 	//printf("*****Test for SymCompUpdate2Struct  n = %d k = %d ***** ", n, k);
-	double alpha_one = 1.0;
-	double beta_zero = 0.0;
-	double beta_one = 1.0;
-	double norm = 0;
-
-	// B = H - V * Y * VT
 	double *B = alloc_arr(n * n); int ldb = n;
 	double *B_rec = alloc_arr(n * n);
 	double *Y = alloc_arr(k * k); int ldy = k;
@@ -898,6 +895,12 @@ void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double
 	double *H = alloc_arr(n * n);
 	double *C = alloc_arr(n * k); int ldc = n;
 	char str[255];
+
+	double alpha_one = 1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+	double norm = 0;
+
 
 	Hilbert(n, HC, ldh);
 	Hilbert(n, H, ldh);
@@ -946,7 +949,7 @@ void Test_SymCompUpdate2Struct(int n, int k, double alpha, int smallsize, double
 	free_arr(&V);
 }
 
-void Test_SymCompRecInv(int n, int smallsize, double eps, char *method)
+void Test_SymCompRecInv(int n, double eps, char *method, int smallsize)
 {
 	//printf("***** Test_SymCompRecInv n = %d eps = %lf **** ", n, eps);
 	double *H = alloc_arr(n * n);
@@ -991,7 +994,7 @@ void Test_SymCompRecInv(int n, int smallsize, double eps, char *method)
 	//else printf("Norm %10.8lf > eps %10.8e : FAILED\n", norm, eps);
 }
 
-void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
+void Test_SymCompRecInvStruct(int n, double eps, char *method, int smallsize)
 {
 	//printf("***** Test_SymCompRecInvStruct n = %d eps = %lf ****", n, eps);
 	double *H = alloc_arr(n * n);
@@ -1045,7 +1048,7 @@ void Test_SymCompRecInvStruct(int n, int smallsize, double eps, char *method)
 	free_arr(&Y);
 }
 
-void Test_LowRankApproxTranspose(int m, int n, int smallsize, double eps, char *method)
+void Test_LowRankApproxTranspose(int m, int n, double eps, char *method, int smallsize)
 {
 	double *H = alloc_arr(m * n); int ldh = m;
 	double *Hinit = alloc_arr(m * n);
@@ -1096,12 +1099,13 @@ void Test_LowRankApproxTranspose(int m, int n, int smallsize, double eps, char *
 
 void Test_CopyStruct(int n, double eps, char *method, int smallsize)
 {
-	double *H = alloc_arr(n * n); int ldh = n;
+	double *H = alloc_arr(n * n);
 	double *H1 = alloc_arr(n * n);
 	double *H2 = alloc_arr(n * n);
+	char str[255];
 
 	double norm = 0;
-	char str[255];
+	int ldh = n;
 
 	//printf("***Test CopyStruct n = %d ", n);
 
@@ -1122,6 +1126,43 @@ void Test_CopyStruct(int n, double eps, char *method, int smallsize)
 	free_arr(&H2);
 	free_arr(&H1);
 	free_arr(&H);
+}
+
+void Test_RankEqual(mnode *Astr, mnode *Bstr)
+{
+	try
+	{
+		char str[255] = "Rank(A01) = Rank(B01) ";
+		AssertEqual(Astr->p, Bstr->p, str);
+	}
+	catch (exception &ex)
+	{
+		cout << ex.what();
+	}
+
+	if (Astr->left != NULL || Bstr->left != NULL)
+	{
+		Test_RankEqual(Astr->left, Bstr->left);
+	}
+
+	if (Astr->right != NULL || Bstr->right != NULL)
+	{
+		Test_RankEqual(Astr->right, Bstr->right);
+	}
+}
+
+void Test_RankAdd(mnode *Astr, mnode *Bstr, mnode *Cstr)
+{
+	try
+	{
+		char str[255] = "Rank(C01) <= Rank(A01) + Rank(B01) ";
+		AssertLess(Astr->p + Bstr->p, Cstr->p, str);
+	}
+	catch (exception &ex)
+	{
+		cout << ex.what();
+	}
+
 }
 
 
