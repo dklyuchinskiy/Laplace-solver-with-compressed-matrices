@@ -28,7 +28,7 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 		work = alloc_arr(lwork);
 
 		// A = U1 * S * V1
-		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, work, &lwork, &info); // first V - not referenced
+		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, V, &ldv, V, &ldv, work, &lwork, &info); // first V - not reference
 		// error 2 (как mkl складывает вектора columnwise)
 
 		for (int j = 0; j < mn; j++)
@@ -64,7 +64,6 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 		return;
 	}
 }
-
 
 void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
 	const int small_size, double eps,
@@ -273,6 +272,59 @@ void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double
 	free(j_ind);
 	free_arr(&f_help);
 }
+
+/*! \brief \b F_ex
+*
+* === Documentation ===
+*
+* \par Purpose:
+* ============
+* 
+ \verbatim
+
+  F_ex performs exact right hand side function
+
+ \endverbatim
+
+ Arguments 
+ ==========
+ \param[in] x
+ \verbatim
+			x is double
+			On entry, value x
+ \endverbatim
+
+  \param[in] y
+	\verbatim
+			y is double
+			On entry, value z
+ \endverbatim
+
+ \param[in] z
+ \verbatim
+			z is double
+			On entry, value z
+ \endverbatim
+
+ Authors:
+========
+ 
+\author Novosibirsk State University
+
+
+\date January 2018
+
+ \par Further Details:
+  =====================
+ 
+\verbatim
+
+  Level 3 Blas routine.
+
+  -- Written on 30-January-2018.
+	Dmitriy Klyuchinskiy, Novosibirsk State University
+\endverbatim
+*/
 
 double F_ex(double x, double y, double z)
 {
@@ -929,7 +981,7 @@ void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, i
 	double alpha_one = 1.0;
 	double beta_zero = 0.0;
 	double beta_one = 1.0;
-	int p = 0;
+	int p1 = 0, p2 = 0;
 
 	if (fabs(alpha) <= eps)
 	{
@@ -986,11 +1038,10 @@ void SymCompUpdate2(int n, int k, double *A, int lda, double alpha, double *Y, i
 		dlacpy("All", &k, &n1, V_uptr, &ldvuptr, &Y12[n1 + ldy21 * 0], &ldy12);
 
 		// [U21,V21] = LowRankApprox (Y21, eps, method);
-		LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p, eps, "SVD");
+		LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p1, eps, "SVD");
 
 		// [U12, V12] = LowRankApprox(Y12, eps, method);
-		LowRankApprox(nk, n1, Y12, ldy12, V12, ldv12, p, eps, "SVD");
-
+		LowRankApprox(nk, n1, Y12, ldy12, V12, ldv12, p1, eps, "SVD");
 
 		// B{2,1} = U21*(V21'*V12);
 
@@ -1464,13 +1515,12 @@ void print(int m, int n, double *u, int ldu, char *mess)
 		printf("%d ", i);
 		for (int j = 0; j < n; j++)
 		{
-			printf("%5.2lf ", u[i + ldu*j]);
+			printf("%5.3lf ", u[i + ldu*j]);
 		}
 		printf("\n");
 	}
 
 	printf("\n");
-
 }
 
 void print_vec_mat(int m, int n, double *u, int ldu, double *vec, char *mess)

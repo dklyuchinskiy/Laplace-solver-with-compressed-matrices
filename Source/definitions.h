@@ -72,6 +72,11 @@ typedef struct list qlist;
 #define CSR_FORMAT
 #define STRUCT
 #define ONLINE
+#define FULL_SVD
+
+//#define COL_UPDATE
+//#define COL_ADD
+
 
 #define PI 3.141592653589793238462643
 

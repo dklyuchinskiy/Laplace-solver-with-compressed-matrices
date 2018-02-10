@@ -241,6 +241,107 @@ void Shell_LowRankApproxTranspose(ptr_test_mult_diag func, const string& test_na
 			}
 }
 
+void Test_DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** Gstr, double *B, double eps, int smallsize)
+{
+	printf("Testing factorization...\n");
+	int n = x.n * y.n;
+	int size = n * z.n;
+	char bench[255] = "No";
+	double *DD = alloc_arr(n * n); int lddd = n;
+	double *DR = alloc_arr(n * n); int lddr = n;
+	double norm = 0;
+
+	GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
+
+	mnode *DCstr;
+	SymCompRecInvStruct(n, Gstr[0], DCstr, smallsize, eps, "SVD");
+	SymResRestoreStruct(n, DCstr, DR, lddr, smallsize);
+
+	printf("Block %d. ", 0);
+	norm = rel_error(n, n, DR, DD, lddd, eps);
+
+	if (norm < eps) printf("Norm %12.10e < eps %12.10lf: PASSED\n", norm, eps);
+	else printf("Norm %12.10lf > eps %12.10lf : FAILED\n", norm, eps);
+
+	free_arr(&DR);
+	FreeNodes(n, DCstr, smallsize);
+
+	for (int k = 1; k < z.n; k++)
+	{
+		double *DR = alloc_arr(n * n); int lddr = n;
+		double *HR = alloc_arr(n * n); int ldhr = n;
+		mnode *DCstr, *Hstr;
+
+		printf("Block %d. ", k);
+
+		SymCompRecInvStruct(n, Gstr[k], DCstr, smallsize, eps, "SVD");
+		SymResRestoreStruct(n, DCstr, DR, lddr, smallsize);
+
+		CopyStruct(n, Gstr[k - 1], Hstr, smallsize);
+		DiagMultStruct(n, Hstr, &B[ind(k - 1, n)], smallsize);
+		SymResRestoreStruct(n, Hstr, HR, ldhr, smallsize);
+
+		// Norm of residual
+#pragma omp parallel for simd schedule(simd:static)
+		for (int j = 0; j < n; j++)
+			for (int i = 0; i < n; i++)
+				HR[i + ldhr * j] = HR[i + ldhr * j] + DR[i + lddr * j];
+
+		norm = rel_error(n, n, HR, DD, lddd, eps);
+
+		if (norm < eps) printf("Norm %12.10e < eps %12.10lf: PASSED\n", norm, eps);
+		else printf("Norm %12.10lf > eps %12.10lf : FAILED\n", norm, eps);
+
+		FreeNodes(n, DCstr, smallsize);
+		FreeNodes(n, Hstr, smallsize);
+		free_arr(&DR);
+		free_arr(&HR);
+	}
+
+	free_arr(&DD);
+
+}
+
+void Test_DirSolveFactDiagStructConvergence(size_m x, size_m y, size_m z, mnode** Gstr, double thresh, int smallsize)
+{
+	printf("------------Test convergence-----------\n");
+	int n = x.n * y.n;
+	double norm = 0;
+	for (int i = 1; i < z.n; i++)
+	{
+		double *GR1 = alloc_arr(n * n); int ldg1 = n;
+		double *GR2 = alloc_arr(n * n); int ldg2 = n;
+		double *GRL = alloc_arr(n * n); int ldgl = n;
+		printf("For block %2d. \n", i);
+
+		SymResRestoreStruct(n, Gstr[i], GR2, ldg2, smallsize);
+		SymResRestoreStruct(n, Gstr[i - 1], GR1, ldg1, smallsize);
+		norm = rel_error(n, n, GR2, GR1, ldg1, thresh);
+		printf("norm |G[%2d] - G[%2d]|/|G[%2d]| = %12.10lf\n", i - 1, i, i - 1, norm);
+
+		SymResRestoreStruct(n, Gstr[z.n - 1], GRL, ldgl, smallsize);
+		norm = rel_error(n, n, GR1, GRL, ldgl, thresh);
+		printf("norm |G[%2d] - G[%2d]|/|G[%2d]| = %12.10lf\n\n", i - 1, z.n - 1, z.n - 1, norm);
+
+		free_arr(&GR1);
+		free_arr(&GR2);
+		free_arr(&GRL);
+	}
+}
+
+void Test_DirSolveFactDiagStructBlockRanks(size_m x, size_m y, size_m z, mnode** Gstr)
+{
+	printf("----------Trees information-----------\n");
+
+	for (int i = 0; i < z.n; i++)
+	{
+		printf("For block %2d. Size: %d, MaxDepth: %d, Ranks: ", i, TreeSize(Gstr[i]), MaxDepth(Gstr[i]));
+		PrintRanksInWidthList(Gstr[i]);
+		printf("\n");
+	}
+
+}
+
 void Shell_CopyStruct(ptr_test_sym_rec_compress func, const string& test_name, int &numb, int &fail_count)
 {
 	char method[255] = "SVD";
@@ -624,7 +725,6 @@ void Test_LowRankApprox(int m, int n, double eps, char *method)
 		}
 
 	LowRankApprox(m, n, A, lda, VT, ldvt, p, eps, "SVD");
-	//printf(" p = %d ", p);
 
 	dgemm("no", "no", &m, &n, &p, &alpha, A, &lda, VT, &ldvt, &beta, A_rec, &lda);
 

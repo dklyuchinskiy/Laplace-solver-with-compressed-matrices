@@ -58,6 +58,7 @@ void print_vec_mat(int m, int n, double *u, int ldu, double *vec, char *mess);
 void print_vec(int size, double *vec1, double *vec2, char *name);
 void print_vec(int size, int *vec1, double *vec2, char *name);
 
+
 int compare_str(int n, char *s1, char *s2);
 int ind(int j, int n);
 map<vector<int>, double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);
@@ -75,6 +76,7 @@ void PrintRanksInWidth(mnode *root);
 void CopyStruct(int n, mnode* Gstr, mnode* &TD1str, int smallsize);
 void FreeNodes(int n, mnode* &Astr, int smallsize);
 void alloc_dense_node(int n, mnode* &Cstr);
+void PrintStruct(int n, mnode *root);
 
  // BinaryTrees - Solver
 
@@ -82,8 +84,8 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 	double *A /* A is overwritten by U */, int lda, mnode* &Astr, double eps, char *method);
 mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
 	double *A /* A is overwritten by U */, int lda, double eps, char *method);
-void SymRecCompressStruct(int n, double *A, const int lda, mnode* &ACstr, const int small_size, double eps, char *method);
-void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int small_size);
+void SymRecCompressStruct(int n, double *A, const int lda, mnode* &ACstr, const int smallsize, double eps, char *method);
+void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int smallsize);
 void DiagMultStruct(int n, mnode* Astr, double *d, int small_size);
 void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, int ldy, int smallsize);
 void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method);

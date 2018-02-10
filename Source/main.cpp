@@ -2,22 +2,25 @@
 #include "templates.h"
 #include "TestSuite.h"
 
-// all source files should contain templates of functions
+/*
+*  Main function
+*/
 
 int main()
 {
 	TestAll();
+	system("pause");
 
-	int n1 = 39; // number of point across the directions
-	int n2 = 39;
-	int n3 = 39;
+	int n1 = 40; // number of point across the directions
+	int n2 = 40;
+	int n3 = 40;
 	int n = n1 * n2; // size of blocks
 	int NB = n3; // number of blocks
 	int size = n * NB; // size of vector x and f: n1 * n2 * n3
-	int smallsize = 300;
+	int smallsize = 400;
 	double thresh = 1e-6; // stop level of algorithm by relative error
 	int ItRef = 200; // Maximal number of iterations in refirement
-	char bench[255] = "no"; // parameter into solver to show internal results
+	char bench[255] = "display"; // parameter into solver to show internal results
 	int sparse_size = n + 2 * (n - 1) + 2 * (n - n1);
 	int non_zeros_in_3diag = n + (n - 1) * 2 + (n - n1) * 2 - (n1 - 1) * 2;
 
@@ -27,7 +30,7 @@ int main()
 	y.n = n2;
 	z.n = n3;
 
-	x.l = y.l = z.l = 40;
+	x.l = y.l = z.l = n1 + 1;
 	x.h = x.l / (double)(x.n + 1);
 	y.h = y.l / (double)(y.n + 1);
 	z.h = z.l / (double)(z.n + 1);
@@ -41,7 +44,6 @@ int main()
 	double *D = alloc_arr(size * n); // it's a matrix with size n^3 * n^2 = size * n
 	double *B_mat = alloc_arr((size - n) * n); int ldb = size - n;
 	int ldd = size;
-	int ldg = size;
 #else
 	double *D = alloc_arr(n * n); // it's a matrix with size n^3 * n^2 = size * n
 	double *B_mat = alloc_arr(n * n);
@@ -105,6 +107,7 @@ int main()
 	GenMatrixandRHSandSolution2(x, y, z, D, ldd, B, x_orig, f, thresh);
 #else
 	GenRHSandSolution(x, y, z, x_orig, f);
+
 	// Set vector B
 #pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < z.n - 1; j++)
@@ -157,6 +160,7 @@ int main()
 
 #endif
 #if 1
+
 	printf("non_zeros: %d\n", non_zeros_in_block3diag);
 	printf("Solving %d x %d x %d Laplace equation\n", n1, n2, n3);
 	printf("The system has %d diagonal blocks of size %d x %d\n", n3, n1*n2, n1*n2);
@@ -167,6 +171,7 @@ int main()
 	
 #ifndef STRUCT
 	double *G = alloc_arr(size * n);
+	int ldg = size;
 	Block3DSPDSolveFast(n1, n2, n3, D, ldd, B, f, thresh, smallsize, ItRef, bench, G, ldg, x_sol, success, RelRes, itcount);
 #else
 	mnode **Gstr;
@@ -180,28 +185,23 @@ int main()
 	printf("success = %d, itcount = %d\n", success, itcount);
 	printf("-----------------------------------\n");
 
-	//print_vec(size, x_orig, x_sol, "x_orig and x_sol");
-
 	printf("Computing error ||x_{exact}-x_{comp}||/||x_{exact}||\n");
 	norm = rel_error(n, 1, x_sol, x_orig, size, thresh);
 
 	if (norm < thresh) printf("Norm %12.10e < eps %12.10lf: PASSED\n", norm, thresh);
 	else printf("Norm %12.10lf > eps %12.10lf : FAILED\n", norm, thresh);
 
-	printf("----------Trees information-----------\n");
 
-	for (int i = z.n - 1; i >= 0; i--)
-	{
-		printf("For block %2d. Size: %d, MaxDepth: %d, Ranks: ", i, TreeSize(Gstr[i]), MaxDepth(Gstr[i]));
-		PrintRanksInWidthList(Gstr[i]);
-		printf("\n");
-	}
+#ifdef STRUCT
+	Test_DirFactFastDiagStructOnline(x, y, z, Gstr, B, thresh, smallsize);
+	Test_DirSolveFactDiagStructConvergence(x, y, z, Gstr, thresh, smallsize);
+	Test_DirSolveFactDiagStructBlockRanks(x, y, z, Gstr);
+#endif
 
 	for (int i = z.n - 1; i >= 0; i--)
 		FreeNodes(n, Gstr[i], smallsize);
 
 	free(Gstr);
-
 #endif
 #endif
 

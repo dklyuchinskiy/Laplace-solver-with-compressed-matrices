@@ -77,6 +77,7 @@ void PrintRanksInWidth(mnode *root)
 	}
 }
 
+
 void PrintRanksInWidthList(mnode *root)
 {
 	if (root == NULL)
@@ -111,6 +112,26 @@ void PrintRanksInWidthList(mnode *root)
 #ifdef DEBUG
 		print_queue(q);
 #endif
+	}
+}
+
+void PrintStruct(int n, mnode *root)
+{
+	if (root == NULL)
+	{
+		return;
+	}
+	else
+	{
+		int n2 = ceil(n / 2.0);
+		int n1 = n - n2;
+		printf("%3d ", root->p);
+		print(n2, root->p, root->U, n2, "U");
+		printf("\n");
+		print(root->p, n1, root->VT, root->p, "VT");
+
+		PrintStruct(n1, root->left);
+		PrintStruct(n2, root->right);
 	}
 }
 
@@ -157,7 +178,7 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 
 	if (compare_str(3, method, "SVD"))
 	{
-		// mem_alloc
+#ifndef FULL_SVD
 		double *VT = alloc_arr(n1 * n1); int ldvt = n1;
 		double *S = alloc_arr(mn);
 		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, VT, &ldvt, VT, &ldvt, &wkopt, &lwork, &info);
@@ -166,6 +187,17 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 
 		// A = U1 * S * V1
 		dgesvd("Over", "Sing", &n2, &n1, A, &lda, S, VT, &ldvt, VT, &ldvt, work, &lwork, &info);
+#else
+		double *VT = alloc_arr(n1 * n1); int ldvt = n1;
+		double *S = alloc_arr(mn);
+		double *U = alloc_arr(n2 * n2); int ldu = n2;
+		dgesvd("All", "All", &n2, &n1, A, &lda, S, U, &ldu, VT, &ldvt, &wkopt, &lwork, &info);
+		lwork = (int)wkopt;
+		double *work = alloc_arr(lwork);
+
+		// A = U1 * S * V1
+		dgesvd("All", "All", &n2, &n1, A, &lda, S, U, &ldu, VT, &ldvt, work, &lwork, &info);	
+#endif
 																					
 		for (int j = 0; j < mn; j++)
 		{
@@ -175,15 +207,26 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 				break;
 			}
 			Astr->p = j + 1;
+#ifndef FULL_SVD
 			for (int i = 0; i < n2; i++)
 				A[i + lda * j] *= S[j];
+#else
+			for (int i = 0; i < n2; i++)
+				U[i + ldu * j] *= S[j];
+#endif
 		}
 
 		// Alloc new node
 		Astr->U = alloc_arr(n2 * Astr->p);
 		Astr->VT = alloc_arr(Astr->p * n1);
+
+#ifndef FULL_SVD
 		dlacpy("All", &n2, &Astr->p, A, &lda, Astr->U, &n2);
 		dlacpy("All", &Astr->p, &n1, VT, &ldvt, Astr->VT, &Astr->p);
+#else
+		dlacpy("All", &n2, &Astr->p, U, &ldu, Astr->U, &n2);
+		dlacpy("All", &Astr->p, &n1, VT, &ldvt, Astr->VT, &Astr->p);
+#endif
 	
 #ifdef DEBUG
 		printf("LowRankStructure function after SVD: n2 = %d, n1 = %d, p = %d\n", n2, n1, Astr->p);
@@ -278,18 +321,18 @@ void SymRecCompressStruct(int n /* order of A */, double *A /* init matrix */, c
 
 }
 
-void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int small_size)
+void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int smallsize)
 {
 	double alpha = 1.0;
 	double beta = 0.0;
 
-	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
+	if (n <= smallsize)
 	{
 		dlacpy("All", &n, &n, H1str->A, &n, H2, &ldh);
 	}
 	else
 	{
-		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		int n2 = (int)ceil(n / 2.0);
 		int n1 = n - n2;
 
 		// A21 = A21 * A12
@@ -299,16 +342,16 @@ void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ld
 		dgemm("Trans", "Trans", &n1, &n2, &H1str->p, &alpha, H1str->VT, &H1str->p, H1str->U, &n2, &beta, &H2[0 + ldh * n1], &ldh);
 
 
-		SymResRestoreStruct(n1, H1str->left, &H2[0 + ldh * 0], ldh, small_size);
-		SymResRestoreStruct(n2, H1str->right, &H2[n1 + ldh * n1], ldh, small_size);
+		SymResRestoreStruct(n1, H1str->left, &H2[0 + ldh * 0], ldh, smallsize);
+		SymResRestoreStruct(n2, H1str->right, &H2[n1 + ldh * n1], ldh, smallsize);
 	}
 }
 
 /* Рекурсивная функция вычисления DAD, где D - диагональная матрица, а Astr - сжатая в структуре */
-void DiagMultStruct(int n, mnode* Astr, double *d, int small_size)
+void DiagMultStruct(int n, mnode* Astr, double *d, int smallsize)
 {
 
-	if (n <= small_size)     // error 4 - не копировалась матрица в этом случае
+	if (n <= smallsize) 
 	{
 #pragma omp parallel for simd schedule(simd:static)
 		for (int j = 0; j < n; j++)
@@ -320,11 +363,11 @@ void DiagMultStruct(int n, mnode* Astr, double *d, int small_size)
 	}
 	else
 	{
-		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		int n2 = (int)ceil(n / 2.0);
 		int n1 = n - n2;
 
-		DiagMultStruct(n1, Astr->left, &d[0], small_size);
-		DiagMultStruct(n2, Astr->right, &d[n1], small_size);
+		DiagMultStruct(n1, Astr->left, &d[0], smallsize);
+		DiagMultStruct(n2, Astr->right, &d[n1], smallsize);
 
 		// D * U - каждая i-ая строка U умножается на элемент вектора d[i]
 #pragma omp parallel for simd schedule(simd:static)
@@ -398,9 +441,9 @@ void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, in
 	}
 }
 
-
-
+//#define COL_ADD
 // Функция вычисления линейной комбинации двух сжатых матриц
+#ifdef COL_ADD
 void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method)
 {
 	double alpha_loc = 1.0;
@@ -432,22 +475,41 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 		double *V12 = alloc_arr(n1_dbl * n1);
 		int ldv12 = n1_dbl;
 
-		mkl_dimatcopy('C', 'N', n2, Astr->p, alpha, Astr->U, n2, n2);
-		mkl_dimatcopy('C', 'N', n2, Bstr->p, beta, Bstr->U, n2, n2);
+
+		double *AU = alloc_arr(n2 * Astr->p); int ldau = n2;
+		double *BU = alloc_arr(n2 * Bstr->p); int ldbu = n2;
+
+		dlacpy("All", &n2, &Astr->p, Astr->U, &n2, AU, &ldau);
+		dlacpy("All", &n2, &Bstr->p, Bstr->U, &n2, BU, &ldbu);
+
+		mkl_dimatcopy('C', 'N', n2, Astr->p, alpha, AU, n2, n2);
+		mkl_dimatcopy('C', 'N', n2, Bstr->p, beta, BU, n2, n2);
 		//Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
 		//Add_dense(n2, n1, beta, &B[n1 + ldb * 0], ldb, 0.0, B, ldb, &B[n1 + ldb * 0], ldb);
 
 		// Y21 = [alpha*A{2,1} beta*B{2,1}];
-		dlacpy("All", &n2, &Astr->p, Astr->U, &n2, &Y21[0 + ldy21 * 0], &ldy21);
-		dlacpy("All", &n2, &Bstr->p, Bstr->U, &n2, &Y21[0 + ldy21 * Astr->p], &ldy21);
+		dlacpy("All", &n2, &Astr->p, AU, &n2, &Y21[0 + ldy21 * 0], &ldy21);
+		dlacpy("All", &n2, &Bstr->p, BU, &n2, &Y21[0 + ldy21 * Astr->p], &ldy21);
 
 		// Y12 = [A{1,2}; B{1,2}];
 		dlacpy("All", &Astr->p, &n1, Astr->VT, &Astr->p, &Y12[0 + ldy12 * 0], &ldy12);
 		dlacpy("All", &Bstr->p, &n1, Bstr->VT, &Bstr->p, &Y12[Astr->p + ldy12 * 0], &ldy12);
 
 		// произведение Y21 и Y12 - это матрица n2 x n1
-		LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p1, eps, "SVD"); // перезапись Y21
-		LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");  // перезапись Y12
+		//LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p1, eps, "SVD"); // перезапись Y21
+		//LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");  // перезапись Y12
+
+		mnode* Y21str = (mnode*)malloc(sizeof(mnode));
+		LowRankApproxStruct(n2, n1_dbl, Y21, ldy21, Y21str, eps, "SVD");
+		p1 = Y21str->p;
+		dlacpy("All", &n2, &Y21str->p, Y21str->U, &n2, Y21, &ldy21);
+		dlacpy("All", &Y21str->p, &n1_dbl, Y21str->VT, &Y21str->p, V21, &ldv21);
+
+		mnode* Y12str = (mnode*)malloc(sizeof(mnode));
+		LowRankApproxStruct(n1_dbl, n1, Y12, ldy12, Y12str, eps, "SVD");
+		p2 = Y12str->p;
+		dlacpy("All", &n1_dbl, &Y12str->p, Y12str->U, &n1_dbl, Y12, &ldy12);
+		dlacpy("All", &Y12str->p, &n1, Y12str->VT, &Y12str->p, V12, &ldv12);
 
 		// Y = V21'*V12;
 		double *Y = alloc_arr(p1 * p2);
@@ -473,6 +535,119 @@ void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode
 	}
 
 }
+#else
+void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method)
+{
+	double alpha_loc = 1.0;
+	double beta_loc = 0.0;
+
+	Cstr = (mnode*)malloc(sizeof(mnode));
+
+	// n - order of A, B and C
+	if (n <= smallsize)
+	{
+		alloc_dense_node(n, Cstr);
+		mkl_domatadd('C', 'N', 'N', n, n, alpha, Astr->A, n, beta, Bstr->A, n, Cstr->A, n);
+		//Add_dense(n, n, alpha, A, lda, beta, B, ldb, C, ldc);
+	}
+	else
+	{
+		int p1 = 0, p2 = 0;
+		int n2 = (int)ceil(n / 2.0); // округление в большую сторону
+		int n1 = n - n2;
+		int n1_dbl = Astr->p + Bstr->p;
+
+		double *Y21 = alloc_arr(n2 * n1_dbl); int ldy21 = n2;
+		double *Y12 = alloc_arr(n1 * n1_dbl); int ldy12 = n1;
+
+		double *V21 = alloc_arr(n2 * n1_dbl); int ldv21 = n2;
+		double *V12 = alloc_arr(n1 * n1_dbl); int ldv12 = n1;
+
+		double *AU = alloc_arr(n2 * Astr->p); int ldau = n2;
+		double *BU = alloc_arr(n2 * Bstr->p); int ldbu = n2;
+
+		double *AV = alloc_arr(n1 * Astr->p); int ldav = n1;
+		double *BV = alloc_arr(n1 * Bstr->p); int ldbv = n1;
+
+		// Filling AU and BU - workspaces
+		dlacpy("All", &n2, &Astr->p, Astr->U, &n2, AU, &ldau);
+		dlacpy("All", &n2, &Bstr->p, Bstr->U, &n2, BU, &ldbu);
+
+		// Filling AV and BV - workspaces
+		Mat_Trans(Astr->p, n1, Astr->VT, Astr->p, AV, ldav);
+		Mat_Trans(Bstr->p, n1, Bstr->VT, Bstr->p, BV, ldbv);
+
+		// Multiplying AU = alpha * AU and BU = beta * BU
+		mkl_dimatcopy('C', 'N', n2, Astr->p, alpha, AU, n2, n2);
+		mkl_dimatcopy('C', 'N', n2, Bstr->p, beta, BU, n2, n2);
+		//Add_dense(n2, n1, alpha, &A[n1 + lda * 0], lda, 0.0, B, ldb, &A[n1 + lda * 0], lda);
+		//Add_dense(n2, n1, beta, &B[n1 + ldb * 0], ldb, 0.0, B, ldb, &B[n1 + ldb * 0], ldb);
+
+		// Y21 = [alpha*A{2,1} beta*B{2,1}];
+		dlacpy("All", &n2, &Astr->p, AU, &n2, &Y21[0 + ldy21 * 0], &ldy21);
+		dlacpy("All", &n2, &Bstr->p, BU, &n2, &Y21[0 + ldy21 * Astr->p], &ldy21);
+
+		// Y12 = [A{1,2}; B{1,2}];
+		dlacpy("All", &n1, &Astr->p, AV, &ldav, &Y12[0 + ldy12 * 0], &ldy12);
+		dlacpy("All", &n1, &Bstr->p, BV, &ldbv, &Y12[0 + ldy12 * Astr->p], &ldy12);
+
+		// произведение Y21 и Y12 - это матрица n2 x n1
+		//LowRankApprox(n2, n1_dbl, Y21, ldy21, V21, ldv21, p1, eps, "SVD"); // перезапись Y21
+		//LowRankApprox(n1_dbl, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");  // перезапись Y12
+
+		mnode* Y21str = (mnode*)malloc(sizeof(mnode));
+		mnode* Y12str = (mnode*)malloc(sizeof(mnode));
+		LowRankApproxStruct(n2, n1_dbl, Y21, ldy21, Y21str, eps, "SVD");
+		LowRankApproxStruct(n1, n1_dbl, Y12, ldy12, Y12str, eps, "SVD");
+	
+		dlacpy("All", &n2, &Y21str->p, Y21str->U, &n2, Y21, &ldy21);
+		dlacpy("All", &Y21str->p, &n1_dbl, Y21str->VT, &Y21str->p, V21, &ldv21);
+
+		dlacpy("All", &n1, &Y12str->p, Y12str->U, &n1, Y12, &ldy12);
+		dlacpy("All", &Y12str->p, &n1_dbl, Y12str->VT, &Y12str->p, V12, &ldv12);
+
+		p1 = Y21str->p;
+		p2 = Y12str->p;
+
+		// Y = V21'*V12;
+		double *Y = alloc_arr(p1 * p2);
+		dgemm("No", "Trans", &p1, &p2, &n1_dbl, &alpha_loc, V21, &ldv21, V12, &ldv12, &beta_loc, Y, &p1);
+
+		// C{2,1} = U21*Y;   
+		Cstr->U = alloc_arr(n2 * p2);
+		dgemm("No", "No", &n2, &p2, &p1, &alpha_loc, Y21, &ldy21, Y, &p1, &beta_loc, Cstr->U, &n2); // mn
+
+		// C{1,2} = U12';
+		double *Y12_tr = alloc_arr(p2 * n1);
+		Mat_Trans(n1, p2, Y12, ldy12, Y12_tr, p2);
+
+		Cstr->VT = alloc_arr(p2 * n1);  Cstr->p = p2;
+		dlacpy("All", &p2, &n1, Y12_tr, &p2, Cstr->VT, &p2);
+
+		AddStruct(n1, alpha, Astr->left, beta, Bstr->left, Cstr->left, smallsize, eps, method);
+		AddStruct(n2, alpha, Astr->right, beta, Bstr->right, Cstr->right, smallsize, eps, method);
+
+
+		free_arr(&Y21str->U);
+		free_arr(&Y21str->VT);
+		free_arr(&Y12str->U);
+		free_arr(&Y12str->VT);
+		free_arr(&Y21);
+		free_arr(&Y12);
+		free_arr(&V21);
+		free_arr(&V12);
+		free_arr(&AU);
+		free_arr(&BU);
+		free_arr(&AV);
+		free_arr(&BV);
+		free_arr(&Y);
+		free_arr(&Y12_tr);
+		free(Y21str);
+		free(Y12str);
+	}
+
+}
+#endif
 
 void alloc_dense_node(int n, mnode* &Cstr)
 {
@@ -484,7 +659,7 @@ void alloc_dense_node(int n, mnode* &Cstr)
 	Cstr->right = NULL;
 }
 
-
+#ifdef COL_UPDATE
 /* Функция вычисления симметричного малорангового дополнения A:= A + alpha * V * Y * V'
 A - симметрическая сжатая (n x n)
 Y - плотная симметричная размера k x k, k << n , V - плотная прямоугольная n x k
@@ -512,14 +687,19 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 		double *C = alloc_arr(n * k); int ldc = n;
 		dsymm("Right", "Up", &n, &k, &alpha_one, Y, &ldy, V, &ldv, &beta_zero, C, &ldc);
 
+		// Copy Astr->A to A_init
+		double *A_init = alloc_arr(n * n); int lda = n;
+		dlacpy("All", &n, &n, Astr->A, &lda, A_init, &lda);
+
 		// X = X + alpha * C * Vt
-		dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, Astr->A, &n);
+		dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, A_init, &lda);
 
 		// B = A
 		alloc_dense_node(n, Bstr);
-		dlacpy("All", &n, &n, Astr->A, &n, Bstr->A, &n);
+		dlacpy("All", &n, &n, A_init, &lda, Bstr->A, &lda);
 
 		free_arr(&C);
+		free_arr(&A_init);
 	}
 	else
 	{
@@ -528,6 +708,7 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 
 		int nk = Astr->p + k;
 		// for this division n2 > n1 we can store a low memory
+
 		double *Y12 = alloc_arr(nk * n1); int ldy12 = nk;
 		double *Y21 = alloc_arr(n2 * nk); int ldy21 = n2;
 
@@ -544,31 +725,44 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 		dlacpy("All", &n2, &k, VY, &ldvy, &Y21[0 + ldy21 * Astr->p], &ldy21);
 
 		//mkl_domatcopy('C', 'T', 1.0, n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
-		Mat_Trans(n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
 
 		// Y12 = [A{1,2} V(1:n1,:)];
+		Mat_Trans(n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
 		dlacpy("All", &Astr->p, &n1, Astr->VT, &Astr->p, &Y12[0 + ldy12 * 0], &ldy12);
-		dlacpy("All", &k, &n1, V_uptr, &ldvuptr, &Y12[Astr->p + ldy21 * 0], &ldy12);
+		dlacpy("All", &k, &n1, V_uptr, &ldvuptr, &Y12[Astr->p + ldy12 * 0], &ldy12);
+
+		mnode* Y21str = (mnode*)malloc(sizeof(mnode));
+		mnode* Y12str = (mnode*)malloc(sizeof(mnode));
+		// LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p1, eps, "SVD");
+		// LowRankApprox(n1, nk, Y12, ldy12, V12, ldv12, p2, eps, "SVD");
 
 		// [U21,V21] = LowRankApprox (Y21, eps, method);
-		LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p1, eps, "SVD");
+		LowRankApproxStruct(n2, nk, Y21, ldy21, Y21str, eps, "SVD");
 
 		// [U12, V12] = LowRankApprox(Y12, eps, method);
-		LowRankApprox(nk, n1, Y12, ldy12, V12, ldv12, p2, eps, "SVD");
+		LowRankApproxStruct(nk, n1, Y12, ldy12, Y12str, eps, "SVD");
+	
+		dlacpy("All", &n2, &Y21str->p, Y21str->U, &n2, Y21, &ldy21);
+		dlacpy("All", &Y21str->p, &nk, Y21str->VT, &Y21str->p, V21, &ldv21);
+
+		p1 = Y21str->p;
+		p2 = Y12str->p;
+		dlacpy("All", &nk, &Y12str->p, Y12str->U, &nk, Y12, &ldy12);
+		dlacpy("All", &Y12str->p, &n1, Y12str->VT, &Y12str->p, V12, &ldv12);
 		Bstr->p = p2;
 
 		// V21 * Y12
 		double *VV = alloc_arr(p1 * p2); int ldvv = p1;
 		dgemm("No", "No", &p1, &p2, &nk, &alpha_one, V21, &ldv21, Y12, &ldy12, &beta_zero, VV, &ldvv);
-
+	
 		// B{2,1} = U21*(V21'*V12);
 		Bstr->U = alloc_arr(n2 * p2);
 		dgemm("No", "No", &n2, &p2, &p1, &alpha_one, Y21, &ldy21, VV, &ldvv, &beta_zero, Bstr->U, &n2);
-
+	
 		// B{1,2} = U12;
 		Bstr->VT = alloc_arr(p2 * n1);
 		dlacpy("All", &p2, &n1, V12, &ldv12, Bstr->VT, &p2);
-
+	
 		// B{1,1} = SymCompUpdate2 (A{1,1}, Y, V(1:n1,:), alpha, eps, method);
 		SymCompUpdate2Struct(n1, k, Astr->left, alpha, Y, ldy, &V[0 + ldv * 0], ldv, Bstr->left, smallsize, eps, method);
 
@@ -580,10 +774,141 @@ void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, in
 		free_arr(&V21);
 		free_arr(&V12);
 		free_arr(&VY);
-		free_arr(&V_uptr);
+		//free_arr(&V_uptr);
 		free_arr(&VV);
 	}
 }
+
+#else
+void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, int ldy, double *V, int ldv, mnode* &Bstr, int smallsize, double eps, char* method)
+{
+	double alpha_one = 1.0;
+	double beta_zero = 0.0;
+	double beta_one = 1.0;
+	int p1 = 0, p2 = 0;
+
+	if (fabs(alpha) < eps)
+	{
+		CopyStruct(n, Astr, Bstr, smallsize);
+		return;
+	}
+
+	Bstr = (mnode*)malloc(sizeof(mnode));
+
+	if (n <= smallsize)
+	{
+		// X = X + alpha * V * Y * VT
+
+		// C = V * Y
+		double *C = alloc_arr(n * k); int ldc = n;
+		dsymm("Right", "Up", &n, &k, &alpha_one, Y, &ldy, V, &ldv, &beta_zero, C, &ldc);
+
+		// Copy Astr->A to A_init
+		double *A_init = alloc_arr(n * n); int lda = n;
+		dlacpy("All", &n, &n, Astr->A, &lda, A_init, &lda);
+
+		// X = X + alpha * C * Vt
+		dgemm("No", "Trans", &n, &n, &k, &alpha, C, &ldc, V, &ldv, &beta_one, A_init, &lda);
+
+		// B = A
+		alloc_dense_node(n, Bstr);
+		dlacpy("All", &n, &n, A_init, &lda, Bstr->A, &lda);
+
+		free_arr(&C);
+		free_arr(&A_init);
+	}
+	else
+	{
+		int n2 = (int)ceil(n / 2.0); // n2 > n1
+		int n1 = n - n2;
+
+		int nk = Astr->p + k;
+		// for this division n2 > n1 we can store a low memory
+
+		double *Y12 = alloc_arr(n1 * nk); int ldy12 = n1;
+		double *Y21 = alloc_arr(n2 * nk); int ldy21 = n2;
+
+		double *V_up = alloc_arr(n1 * k); int ldvup = n1;
+		double *A12 = alloc_arr(n1 * Astr->p); int lda12 = n1;
+
+		double *VY = alloc_arr(n2 * k); int ldvy = n2;
+
+		double *V12 = alloc_arr(n1 * nk); int ldv12 = n1;
+		double *V21 = alloc_arr(n2 * nk); int ldv21 = n2;
+
+		dgemm("No", "No", &n2, &k, &k, &alpha, &V[n1 + ldv * 0], &ldv, Y, &ldy, &beta_zero, VY, &ldvy);
+
+		// Y21 = [A{2,1} alpha*V(m:n,:)*Y];
+		dlacpy("All", &n2, &Astr->p, Astr->U, &n2, &Y21[0 + ldy21 * 0], &ldy21);
+		dlacpy("All", &n2, &k, VY, &ldvy, &Y21[0 + ldy21 * Astr->p], &ldy21);
+
+		//mkl_domatcopy('C', 'T', 1.0, n1, k, &V[0 + ldv * 0], ldv, V_uptr, ldvuptr);
+
+		// Y12 = [A{1,2} V(1:n1,:)];
+		dlacpy("All", &n1, &k, &V[0 + ldv * 0], &ldv, V_up, &ldvup);
+		Mat_Trans(Astr->p, n1, Astr->VT, Astr->p, A12, lda12);
+		dlacpy("All", &n1, &Astr->p, A12, &lda12, &Y12[0 + ldy12 * 0], &ldy12);
+		dlacpy("All", &n1, &k, V_up, &ldvup, &Y12[0 + ldy12 * Astr->p], &ldy12);
+
+		//	LowRankApprox(n2, nk, Y21, ldy21, V21, ldv21, p1, eps, "SVD");
+		//	LowRankApprox(n1, nk, Y12, ldy12, V12, ldv12, p2, eps, "SVD");
+
+		mnode* Y21str = (mnode*)malloc(sizeof(mnode));
+		mnode* Y12str = (mnode*)malloc(sizeof(mnode));
+
+		// [U21,V21] = LowRankApprox (Y21, eps, method);
+		LowRankApproxStruct(n2, nk, Y21, ldy21, Y21str, eps, "SVD");
+
+		// [U12, V12] = LowRankApprox(Y12, eps, method);
+		LowRankApproxStruct(n1, nk, Y12, ldy12, Y12str, eps, "SVD");
+	
+		dlacpy("All", &n2, &Y21str->p, Y21str->U, &n2, Y21, &ldy21);
+		dlacpy("All", &Y21str->p, &nk, Y21str->VT, &Y21str->p, V21, &ldv21);
+
+		dlacpy("All", &n1, &Y12str->p, Y12str->U, &n1, Y12, &ldy12);
+		dlacpy("All", &Y12str->p, &nk, Y12str->VT, &Y12str->p, V12, &ldv12);
+
+		p1 = Y21str->p;
+		p2 = Y12str->p;
+		Bstr->p = p2;
+
+		// V21 * Y12
+		double *VV = alloc_arr(p1 * p2);
+		double *V_tr = alloc_arr(nk * p2);
+		Mat_Trans(p2, nk, V12, ldv12, V_tr, nk);
+		dgemm("No", "No", &p1, &p2, &nk, &alpha_one, V21, &ldv21, V_tr, &nk, &beta_zero, VV, &p1);
+
+		// B{2,1} = U21*(V21'*V12);
+		Bstr->U = alloc_arr(n2 * p2);
+		dgemm("No", "No", &n2, &p2, &p1, &alpha_one, Y21, &ldy21, VV, &p1, &beta_zero, Bstr->U, &n2);
+
+		// B{1,2} = U12;
+		Bstr->VT = alloc_arr(p2 * n1);
+		Mat_Trans(n1, p2, Y12, ldy12, Bstr->VT, p2);
+
+		// B{1,1} = SymCompUpdate2 (A{1,1}, Y, V(1:n1,:), alpha, eps, method);
+		SymCompUpdate2Struct(n1, k, Astr->left, alpha, Y, ldy, &V[0 + ldv * 0], ldv, Bstr->left, smallsize, eps, method);
+
+		// B{2,2} = SymCompUpdate2 (A{2,2}, Y, V(m:n ,:), alpha, eps, method);
+		SymCompUpdate2Struct(n2, k, Astr->right, alpha, Y, ldy, &V[n1 + ldv * 0], ldv, Bstr->right, smallsize, eps, method);
+
+
+		free_arr(&Y12str->U);
+		free_arr(&Y12str->VT);
+		free_arr(&Y21str->U);
+		free_arr(&Y21str->VT);
+		free_arr(&Y21);
+		free_arr(&Y12);
+		free_arr(&V21);
+		free_arr(&V12);
+		free_arr(&VY);
+		free_arr(&VV);
+		free_arr(&V_tr);
+		free(Y21str);
+		free(Y12str);
+	}
+}
+#endif
 
 void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method)
 {
@@ -600,24 +925,28 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 	if (n <= smallsize)
 	{
 		int *ipiv = (int*)malloc(n * sizeof(int));
+		double *A_init = alloc_arr(n * n);
+
+		dlacpy("All", &n, &n, Astr->A, &n, A_init, &n);
 
 		// LU factorization of A
-		dgetrf(&n, &n, Astr->A, &n, ipiv, &info);
+		dgetrf(&n, &n, A_init, &n, ipiv, &info);
 
 		// space query
-		dgetri(&n, Astr->A, &n, ipiv, &wquery, &lwork, &info);
+		dgetri(&n, A_init, &n, ipiv, &wquery, &lwork, &info);
 
 		lwork = (int)wquery;
 		double *work = alloc_arr(lwork);
 
 		// inversion of A
-		dgetri(&n, Astr->A, &n, ipiv, work, &lwork, &info);
+		dgetri(&n, A_init, &n, ipiv, work, &lwork, &info);
 
 		// dlacpy
 		alloc_dense_node(n, Bstr);
-		dlacpy("All", &n, &n, Astr->A, &n, Bstr->A, &n);
+		dlacpy("All", &n, &n, A_init, &n, Bstr->A, &n);
 
 		free_arr(&work);
+		free_arr(&A_init);
 		free(ipiv);
 	}
 	else
@@ -626,6 +955,7 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 		int n1 = n - n2;
 
 		Bstr->p = Astr->p;
+	//	printf("Bp = %d\n", Bstr->p);
 		double *X11 = alloc_arr(n1 * n1); int ldx11 = n1;
 		double *X22 = alloc_arr(n2 * n2); int ldx22 = n2;
 		double *V = alloc_arr(n1 * Astr->p); int ldv = n1;
@@ -761,7 +1091,6 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	int size = n * nbr;
 	double *DD = alloc_arr(n * n); int lddd = n;
 	double tt;
-	//TestRunner test;
 
 	if (compare_str(7, bench, "display"))
 	{
@@ -773,6 +1102,7 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	mnode *DCstr;
 	tt = omp_get_wtime();
 	GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
+
 	SymRecCompressStruct(n, DD, lddd, DCstr, smallsize, eps, "SVD");
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display")) printf("Compressing D(0) time: %lf\n", tt);
@@ -784,18 +1114,17 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 	if (compare_str(7, bench, "display")) printf("Computing G(1) time: %lf\n", tt);
 
 	printf("Block %d. ", 0);
-	Test_RankEqual(DCstr, Gstr[0]);
-	printf("\n");
+//	Test_RankEqual(DCstr, Gstr[0]);
 
 	FreeNodes(n, DCstr, smallsize);
-	free(DD);
+	free_arr(&DD);
 
 	for (int k = 1; k < nbr; k++)
 	{
 		double *DD = alloc_arr(n * n); int lddd = n;
 		mnode *DCstr, *TDstr, *TD1str;
 
-		printf("Block %d. ", k);
+	//	printf("Block %d. ", k);
 
 		tt = omp_get_wtime();
 		GenerateDiagonal2DBlock(k, x, y, z, DD, lddd);
@@ -805,30 +1134,26 @@ void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, do
 
 		tt = omp_get_wtime();
 		CopyStruct(n, Gstr[k - 1], TD1str, smallsize);
-		Test_RankEqual(Gstr[k - 1], TD1str);
+//		Test_RankEqual(Gstr[k - 1], TD1str);
 
 		DiagMultStruct(n, TD1str, &B[ind(k - 1, n)], smallsize);
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Mult D(%d) time: %lf\n", k, tt);
-		Test_RankEqual(Gstr[k - 1], TD1str);
+//		Test_RankEqual(Gstr[k - 1], TD1str);
 
 		tt = omp_get_wtime();
 		AddStruct(n, 1.0, DCstr, -1.0, TD1str, TDstr, smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
 		if (compare_str(7, bench, "display")) printf("Add %d time: %lf\n", k, tt);
 
-		Test_RankAdd(DCstr, TD1str, TDstr);
+//		Test_RankAdd(DCstr, TD1str, TDstr);
 
 		tt = omp_get_wtime();
 		SymCompRecInvStruct(n, TDstr, Gstr[k], smallsize, eps, "SVD");
 		tt = omp_get_wtime() - tt;
-		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf\n", k, tt);
-		if (compare_str(7, bench, "display")) printf("\n");
+		if (compare_str(7, bench, "display")) printf("Computing G(%d) time: %lf\n\n", k, tt);
 
-		Test_RankEqual(TDstr, Gstr[k]);
-		printf("\n");
-
-
+//		Test_RankEqual(TDstr, Gstr[k]);
 
 		FreeNodes(n, DCstr, smallsize);
 		FreeNodes(n, TDstr, smallsize);
