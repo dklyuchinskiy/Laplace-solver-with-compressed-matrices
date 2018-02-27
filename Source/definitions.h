@@ -1,5 +1,10 @@
 #pragma once
 
+/*****************************
+Preprocessor definitions and
+declaration of used structures
+*****************************/
+
 // C
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,13 +24,7 @@
 #include <vector>
 
 
-#define TEST 1
-
-#define N 10
-
 //#define DEBUG
-
-#define TEST_IT 10
 
 #define EPS 0.00000001
 
@@ -59,7 +58,7 @@ struct MatrixCSR {
 typedef struct MatrixCSR dcsr;
 
 struct list {
-	mnode* node; // указатель на структуру
+	mnode* node;
 	struct list* next;
 };
 
@@ -69,10 +68,13 @@ struct my_queue {
 
 typedef struct list qlist;
 
-#define CSR_FORMAT
-#define STRUCT
+#define STRUCT_CSR
+
+#ifdef STRUCT_CSR
 #define ONLINE
-#define FULL_SVD
+#endif
+
+//#define FULL_SVD
 
 //#define COL_UPDATE
 //#define COL_ADD

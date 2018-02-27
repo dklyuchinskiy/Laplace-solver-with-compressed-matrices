@@ -2,11 +2,18 @@
 #include "templates.h"
 #include "TestSuite.h"
 
+/********************************************************
+Source file contains functionality to work
+with compressed matrices with HSS structure, as presented
+in functions.cpp (for example, Add, Mult, Inverse and etc.).
 
-// ---------- Compressed matrices --------------
+But now, all algorithms to work with compressed matrices
+are implemented by using Binary Tree Structure, defined
+in definitions.h.
 
-// This problem demonstrates simple binary tree traversal.Given a binary tree, count the number of nodes in the tree.
-// recursive function
+In addition, the computation of Size, MaxDepth
+and Ranks of the matrix tree is presented here.
+********************************************************/
 
 int TreeSize(mnode* root)
 {
@@ -133,37 +140,6 @@ void PrintStruct(int n, mnode *root)
 		PrintStruct(n1, root->left);
 		PrintStruct(n2, root->right);
 	}
-}
-
-void Test_QueueList(int n, double eps, char* method, int smallsize)
-{
-	printf("----Test for queue implementation with LIST---\n n = %d \n", n);
-	// A - matrix in dense order
-	double *A = alloc_arr(n * n);
-	double *A_init = alloc_arr(n * n);
-	int lda = n;
-
-	for (int j = 0; j < n; j++)
-		for (int i = 0; i < n; i++)
-		{
-			A[i + lda * j] = 1.0 / (i + j + 1);
-			A_init[i + lda * j] = 1.0 / (i + j + 1);
-		}
-
-	mnode *ACstr;
-	SymRecCompressStruct(n, A, lda, ACstr, smallsize, eps, method);
-
-	//printf("first level. p = %d\n", ACstr->p);
-	//printf("second level. left: %d right: %d\n", Astr->left->p, Astr->right->p);
-
-	printf("Size: %d, MaxDepth: %d, Ranks: ", TreeSize(ACstr), MaxDepth(ACstr));
-//	PrintRanksInWidth(ACstr);
-	printf("List:\n");
-	PrintRanksInWidthList(ACstr);
-
-	FreeNodes(n, ACstr, smallsize);
-	free_arr(&A);
-	free_arr(&A_init);
 }
 
 // ---------------HSS technology----------
@@ -1004,7 +980,6 @@ void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double
 	}
 }
 
-#if 1
 /* Функция вычисления разложения симметричной блочно-диагональной матрицы с использование сжатого формата.
 Внедиагональные блоки предполагаются диагональными матрицами */
 void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B, mnode** &Gstr,
@@ -1279,50 +1254,10 @@ void ResidCSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_sol, double *f, doub
 	free_arr(&f1);
 }
 
-void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps)
-{
-	int n = n1 * n2;
-	int size = n * n3;
-	double RelRes = 0;
-	double *g = alloc_arr(size);
-	ResidCSR(n1, n2, n3, Dcsr, x_orig, f, g, RelRes);
-
-	if (RelRes < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", RelRes, eps);
-	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", RelRes, eps);
-
-	free_arr(&g);
-}
-void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh)
-{
-	int n = n1 * n2;
-	int size = n * n3;
-	double RelRes = 0;
-	double *g = alloc_arr(size);
-	double *f1 = alloc_arr(size);
-	double *f2 = alloc_arr(size);
-	double Res1 = 0;
-	double Res2 = 0;
-
-	for (int i = 0; i < size; i++)
-	{
-		double *x_test = alloc_arr(size);
-		x_test[i] = 1;
-		Mult_Au(n1, n2, n3, D, ldd, B, x_test, f1);
-		mkl_dcsrgemv("No", &size, Dcsr->values, Dcsr->ia, Dcsr->ja, x_test, f2);
-	//	print_vec(size, f1, f2, "f1 and f2");
-		rel_error(size, 1, f1, f2, size, thresh);
-		free(x_test);
-	}
-
-	free_arr(&f1);
-	free_arr(&f2);
-	free_arr(&g);
-}
-
 void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
 	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount)
 {
-#ifndef CSR_FORMAT
+#ifndef ONLINE
 	if (D == NULL)
 	{
 		printf("D is Null - error\n");
@@ -1333,16 +1268,10 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 	int n = x.n * y.n;
 	double tt;
 	double tt1;
-#ifndef CSR_FORMAT
-	double *DI = alloc_arr(size * n); int lddi = size;
-	double *BI = alloc_arr(size - n); // vector of diagonal elementes
-	double *x_orig = alloc_arr(size);
-	GenMatrixandRHSandSolution2(x, y, z, DI, ldd, BI, x_orig, f, thresh);
-//	dlacpy("All", &size, &n, D, &ldd, DI, &lddi);
-#endif
 
 	printf("Factorization of matrix...\n");
 	tt = omp_get_wtime();
+
 #ifndef ONLINE
 	DirFactFastDiagStruct(x.n, y.n, z.n, D, ldd, B, Gstr, thresh, smallsize, bench);
 #else
@@ -1356,11 +1285,9 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 
 	printf("Solving of the system...\n");
 	tt = omp_get_wtime();
-#ifndef CSR_FORMAT
-	DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, BI, f, x_sol, thresh, smallsize);
-#else
+
 	DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, B, f, x_sol, thresh, smallsize);
-#endif
+
 	tt = omp_get_wtime() - tt;
 	if (compare_str(7, bench, "display"))
 	{
@@ -1370,11 +1297,8 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 	double *g = alloc_arr(size);
 	double *x1 = alloc_arr(size);
 	RelRes = 1;
-#ifndef CSR_FORMAT
-	Resid(x.n, y.n, z.n, DI, lddi, BI, x_sol, f, g, RelRes);
-#else
+
 	ResidCSR(x.n, y.n, z.n, Dcsr, x_sol, f, g, RelRes);
-#endif
 
 	printf("RelRes = %10.8lf\n", RelRes);
 	if (RelRes < thresh)
@@ -1391,22 +1315,16 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 			while ((RelRes > thresh) && (itcount < ItRef))
 			{
 				tt = omp_get_wtime();
-#ifndef CSR_FORMAT
-				DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, BI, g, x1, thresh, smallsize);
-#else
-				DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, B, g, x1, thresh, smallsize);
-#endif
+
+			DirSolveFastDiagStruct(x.n, y.n, z.n, Gstr, B, g, x1, thresh, smallsize);
 
 #pragma omp parallel for simd schedule(simd:static)
 				for (int i = 0; i < size; i++)
 					x_sol[i] = x_sol[i] + x1[i];
 
 				// начальное решение f сравниваем с решением A_x0 + A_x1 + A_x2
-#ifndef CSR_FORMAT
-				Resid(x.n, y.n, z.n, DI, lddi, BI, x_sol, f, g, RelRes);
-#else
 				ResidCSR(x.n, y.n, z.n, Dcsr, x_sol, f, g, RelRes);
-#endif
+
 				itcount = itcount + 1;
 				tt = omp_get_wtime() - tt;
 				if (compare_str(7, bench, "display")) printf("itcount = %d, RelRes = %lf, Time = %lf\n", itcount, RelRes, tt);
@@ -1418,12 +1336,7 @@ void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd,
 		}
 	}
 
-#ifndef CSR_FORMAT
-	free_arr(&DI);
-#endif
 	free_arr(&g);
 	free_arr(&x1);
 }
 
-
-#endif

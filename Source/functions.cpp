@@ -1,13 +1,20 @@
 #include "definitions.h"
 #include "templates.h"
 
+/*****************************************************
+Source file contains functionality to work
+with compressed matrices with HSS structure
+(for example, Add, Mult, Inverse and etc.).
+
+Also, source file has definitions of support functions,
+declared in templates.h
+******************************************************/
+
 using namespace std;
 
-// ---------- Compressed matrices --------------
-
 // Low Rank approximation
-void LowRankApprox(int n2, int n1 /* size of A21 = A */,
-					double *A /* A is overwritten by U */, int lda, double *V /* V is stored in A12 */, int ldv, int &p, double eps, char *method)
+void LowRankApprox(int n2, int n1 /* size of A21 = A */, double *A /* A is overwritten by U */, int lda,
+				   double *V /* V is stored in A12 */, int ldv, int &p, double eps, char *method)
 {
 	int mn = min(n1, n2);
 	int info = 0;
@@ -66,8 +73,7 @@ void LowRankApprox(int n2, int n1 /* size of A21 = A */,
 }
 
 void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
-	const int small_size, double eps,
-	char *method /* SVD or other */)
+					const int small_size, double eps, char *method /* SVD or other */)
 {
 	int ldu, ldv;
 
@@ -344,6 +350,7 @@ void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, do
 	int size = n * z.n;
 	
 	// diagonal blocks in dense format
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < n; i++)
 	{
 		DD[i + lddd * i] = -2.0 * (1.0 / (x.h * x.h) + 1.0 / (y.h * y.h) + 1.0 / (z.h * z.h));
@@ -352,6 +359,9 @@ void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, do
 		if (i >= x.n) DD[i + lddd * (i - x.n)] = 1.0 / (y.h * y.h);
 		if (i <= n - x.n - 1)  DD[i + lddd * (i + x.n)] = 1.0 / (y.h * y.h);
 
+	}
+	for (int i = 0; i < n; i++)
+	{
 		if (i % x.n == 0 && i > 0)
 		{
 			DD[i - 1 + lddd * i] = 0;
@@ -361,20 +371,29 @@ void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, do
 
 }
 
-void GenRHSandSolution(size_m x, size_m y, size_m z, /* output */ double *u, double *f)
+void GenRHSandSolution(size_m x, size_m y, size_m z, /* output */ double* B, double *u, double *f)
 {
 	int n = x.n * y.n;
+	
+	// Set vector B
+#pragma omp parallel for schedule(dynamic)
+	for (int j = 0; j < z.n - 1; j++)
+#pragma omp simd
+		for (int i = 0; i < n; i++)
+			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
 
 	// approximation of exact right hand side (inner grid points)
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < z.n; k++)
 		for (int j = 0; j < y.n; j++)
+#pragma omp simd
 			for (int i = 0; i < x.n; i++)
 				f[k * n + j * x.n + i] = F_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
 
 	// for boundaries z = 0 and z = Lz we distract blocks B0 and Bm from the RHS
-#pragma omp parallel for schedule(dynamic,16)
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < y.n; j++)
+#pragma omp simd
 		for (int i = 0; i < x.n; i++)
 		{
 			f[ind(0, n) + ind(j, x.n) + i] -= u_ex((i + 1) * x.h, (j + 1) * y.h, 0) / (z.h * z.h); // u|z = 0
@@ -387,6 +406,7 @@ void GenRHSandSolution(size_m x, size_m y, size_m z, /* output */ double *u, dou
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < z.n; k++)
 	{
+#pragma omp simd
 		for (int i = 0; i < x.n; i++)
 		{
 			f[k * n + 0 * x.n + i] -= u_ex((i + 1) * x.h, 0, (k + 1) * z.h) / (y.h * y.h);
@@ -403,6 +423,7 @@ void GenRHSandSolution(size_m x, size_m y, size_m z, /* output */ double *u, dou
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < z.n; k++)
 		for (int j = 0; j < y.n; j++)
+#pragma omp simd
 			for (int i = 0; i < x.n; i++)
 				u[ind(k, n) + ind(j, x.n) + i] = u_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
 
@@ -432,11 +453,12 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < nbr; k++)
 		for (int j = 0; j < y.n; j++)
+#pragma omp simd
 			for (int i = 0; i < x.n; i++)
 				f[k * n + j * x.n + i] = F_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
 
 	// for boundaries z = 0 and z = Lz we distract blocks B0 and Bm from the RHS
-#pragma omp parallel for schedule(dynamic,16)
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < y.n; j++)
 		for (int i = 0; i < x.n; i++)
 		{
@@ -450,6 +472,7 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < nbr; k++)
 	{
+#pragma omp simd
 			for (int i = 0; i < x.n; i++)
 			{
 				f[k * n + 0 * x.n + i] -= u_ex((i + 1) * x.h, 0, (k + 1) * z.h) / (y.h * y.h);
@@ -466,6 +489,7 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 	// Set vector B
 #pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < z.n - 1; j++)
+#pragma omp simd
 		for (int i = 0; i < n; i++)
 			B[ind(j, n) + i] = 1.0 / (z.h * z.h);
 
@@ -479,6 +503,7 @@ void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
 #pragma omp parallel for schedule(dynamic)
 	for (int k = 0; k < nbr; k++)
 		for (int j = 0; j < y.n; j++)
+#pragma omp simd
 			for (int i = 0; i < x.n; i++)
 				u[ind(k, n) + ind(j, x.n) + i] = u_ex((i + 1) * x.h, (j + 1) * y.h, (k + 1) * z.h);
 	
@@ -554,8 +579,6 @@ void GenSolVector(int size, double *vector)
 	for (int i = 0; i < size; i++)
 		vector[i] = random(0.0, 1.0);
 }
-
-//void Resid_CSR(n1, n2, n3, DI, lddi, B, x_sol, f, g, RelRes);
 
 void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
 			/* output */ double *G, int ldg, double *x_sol, int &success, double &RelRes, int &itcount)
@@ -1154,7 +1177,9 @@ void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize,
 
 void Eye(int n, double *H, int ldh)
 {
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < n; j++)
+#pragma omp simd
 		for (int i = 0; i < n; i++)
 			if (j == i) H[i + ldh * j] = 1.0;
 			else H[i + ldh * j] = 0.0;
@@ -1162,7 +1187,9 @@ void Eye(int n, double *H, int ldh)
 
 void Diag(int n, double *H, int ldh, double value)
 {
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < n; j++)
+#pragma omp simd
 		for (int i = 0; i < n; i++)
 			if (j == i) H[i + ldh * j] = value;
 			else H[i + ldh * j] = 0.0;
@@ -1171,16 +1198,18 @@ void Diag(int n, double *H, int ldh, double value)
 
 void Hilbert(int n, double *H, int ldh)
 {
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < n; j++)
+#pragma omp simd
 		for (int i = 0; i < n; i++)
 			H[i + ldh * j] = 1.0 / (i + j + 1);
 }
 
 void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr)
 {
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < n; j++)
+#pragma omp simd
 		for (int i = 0; i < m; i++)
 			Hcomp_tr[j + ldhtr * i] = H[i + ldh * j];
 }
@@ -1191,30 +1220,27 @@ void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, doub
 
 	if (beta == dzero)
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < n; j++)
-		{
+#pragma omp simd
 			for (int i = 0; i < m; i++)
 				C[i + ldc * j] = alpha * A[i + lda * j];
-		}
 	}
 	else if (alpha == dzero)
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < n; j++)
-		{
+#pragma omp simd
 			for (int i = 0; i < m; i++)
 				C[i + ldc * j] = beta * B[i + ldb * j];
-		}
 	}
 	else
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < n; j++)
-		{
+#pragma omp simd
 			for (int i = 0; i < m; i++)
 				C[i + ldc * j] = alpha * A[i + lda * j] + beta * B[i + ldb * j];
-		}
 	}
 }
 
@@ -1222,15 +1248,17 @@ void op_mat(int m, int n, double *Y11, double *Y12, int ldy, char sign)
 {
 	if (sign == '+')
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < n; j++)
+#pragma omp simd
 			for (int i = 0; i < m; i++)
 				Y11[i + ldy * j] += Y12[i + ldy *j];
 	}
 	else if (sign == '-')
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < n; j++)
+#pragma omp simd
 			for (int i = 0; i < m; i++)
 				Y11[i + ldy * j] -= Y12[i + ldy *j];
 	}
@@ -1368,17 +1396,21 @@ void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double 
 	int n = x.n * y.n;
 	int size = n * z.n;
 
-	for (int blk = 0; blk < z.n - 1; blk++)
+	for (int blk = 0; blk < z.n; blk++)
 	{
-		Diag(n, &BL[ind(blk, n)], ldbl, 1.0 / (z.h * z.h));
-		Diag(n, &BR[ind(blk, n)], ldbr, 1.0 / (z.h * z.h));
+		GenerateDiagonal2DBlock(blk, x, y, z, &A[ind(blk, n)], lda);
+		if (blk < z.n - 1)
+		{
+			Diag(n, &BL[ind(blk, n)], ldbl, 1.0 / (z.h * z.h));
+			Diag(n, &BR[ind(blk, n)], ldbr, 1.0 / (z.h * z.h));
+		}
 	}
 
 	map<vector<int>, double> CSR;
 	CSR = block3diag_to_CSR(x.n, y.n, z.n, BL, ldbl, A, lda, BR, ldbr, Acsr);
 }
 
-void GenSparseMatrix2(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
+void GenSparseMatrixOnline(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr)
 {
 	int n = x.n * y.n;
 	int size = n * z.n;
@@ -1545,7 +1577,7 @@ double* alloc_arr(int n)
 {
 	double *f = (double*)malloc(n * sizeof(double));
 
-#pragma omp parallel for
+#pragma omp parallel for simd schedule(simd:static)
 	for (int i = 0; i < n; i++)
 		f[i] = 0.0;
 

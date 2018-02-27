@@ -1,5 +1,9 @@
 #pragma once
 
+/**********************************
+Prototypes for all test functions.
+**********************************/
+
 typedef void(*ptr_test_low_rank)(int, int, double, char *);
 typedef void(*ptr_test_sym_rec_compress)(int, double, char *, int);
 typedef void(*ptr_test_mult_diag)(int, int, double, char *, int);
@@ -29,10 +33,12 @@ void Test_SymCompRecInvStruct(int n, double eps, char *method, int smallsize);
 void Test_CopyStruct(int n, double eps, char *method, int smallsize);
 void Test_QueueList(int n, double eps, char* method, int smallsize);
 void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps);
+void Test_Dense_to_CSR(size_m x, size_m y, size_m z, int non_zeros_in_3diag, double *D, int ldd);
 void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh);
 void Test_DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** Gstr, double *B, double thresh, int smallsize);
 void Test_DirSolveFactDiagStructConvergence(size_m x, size_m y, size_m z, mnode** Gstr, double thresh, int smallsize);
 void Test_DirSolveFactDiagStructBlockRanks(size_m x, size_m y, size_m z, mnode** Gstr);
+
 
 // Tests Shells
 void TestAll();

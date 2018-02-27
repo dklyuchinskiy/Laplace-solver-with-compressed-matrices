@@ -3,6 +3,14 @@
 #include "TestSuite.h"
 #include "TestFramework.h"
 
+/***************************************
+Source file contains tests for testing
+functionalites, implemented in
+functions.cpp and BinaryTrees.cpp.
+
+The interface is declared in TestSuite.h
+****************************************/
+
 void TestAll()
 {
 	TestRunner runner;
@@ -1263,6 +1271,106 @@ void Test_RankAdd(mnode *Astr, mnode *Bstr, mnode *Cstr)
 		cout << ex.what();
 	}
 
+}
+
+void Test_Dense_to_CSR(size_m x, size_m y, size_m z, int non_zeros_in_3diag, double *D, int ldd)
+{
+	int n = x.n * y.n;
+	printf("non_zeros: %d\n", non_zeros_in_3diag);
+	double *values = alloc_arr(non_zeros_in_3diag);
+	int *ia = (int*)malloc(non_zeros_in_3diag * sizeof(int));
+	int *ja = (int*)malloc(non_zeros_in_3diag * sizeof(int));
+	map<vector<int>, double> CSR;
+	CSR = dense_to_CSR(n, n, &D[0], ldd, ia, ja, values);
+	print(n, n, &D[0], ldd, "D[0]");
+	print_map(CSR);
+	free(ia);
+	free(ja);
+	free(values);
+
+	/*
+	print(n, n, &B_mat[0], ldb, "B[0]");
+	print(size, n, D, ldd, "D");
+
+	printf("all non_zero elements: %d\n", non_zeros_in_block3diag);
+	for (int i = 0; i < size + 1; i ++)
+	printf("%d: ia = %d value(ia) = %lf diff = %d\n", i, Dcsr->ia[i], Dcsr->values[Dcsr->ia[i] - 1], Dcsr->ia[i+1]- Dcsr->ia[i]);
+
+	print_vec(non_zeros_in_block3diag, Dcsr->ja, Dcsr->values, "ja and values");
+	print_map(CSR);*/
+
+}
+
+void Test_QueueList(int n, double eps, char* method, int smallsize)
+{
+	printf("----Test for queue implementation with LIST---\n n = %d \n", n);
+	// A - matrix in dense order
+	double *A = alloc_arr(n * n);
+	double *A_init = alloc_arr(n * n);
+	int lda = n;
+
+	for (int j = 0; j < n; j++)
+		for (int i = 0; i < n; i++)
+		{
+			A[i + lda * j] = 1.0 / (i + j + 1);
+			A_init[i + lda * j] = 1.0 / (i + j + 1);
+		}
+
+	mnode *ACstr;
+	SymRecCompressStruct(n, A, lda, ACstr, smallsize, eps, method);
+
+	//printf("first level. p = %d\n", ACstr->p);
+	//printf("second level. left: %d right: %d\n", Astr->left->p, Astr->right->p);
+
+	printf("Size: %d, MaxDepth: %d, Ranks: ", TreeSize(ACstr), MaxDepth(ACstr));
+	//	PrintRanksInWidth(ACstr);
+	printf("List:\n");
+	PrintRanksInWidthList(ACstr);
+
+	FreeNodes(n, ACstr, smallsize);
+	free_arr(&A);
+	free_arr(&A_init);
+}
+
+void Test_TransferBlock3Diag_to_CSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_orig, double *f, double eps)
+{
+	int n = n1 * n2;
+	int size = n * n3;
+	double RelRes = 0;
+	double *g = alloc_arr(size);
+	ResidCSR(n1, n2, n3, Dcsr, x_orig, f, g, RelRes);
+
+	if (RelRes < eps) printf("Norm %10.8e < eps %10.8lf: PASSED\n", RelRes, eps);
+	else printf("Norm %10.8lf > eps %10.8e : FAILED\n", RelRes, eps);
+
+	free_arr(&g);
+}
+
+void Test_CompareColumnsOfMatrix(int n1, int n2, int n3, double* D, int ldd, double* B, dcsr* Dcsr, double thresh)
+{
+	int n = n1 * n2;
+	int size = n * n3;
+	double RelRes = 0;
+	double *g = alloc_arr(size);
+	double *f1 = alloc_arr(size);
+	double *f2 = alloc_arr(size);
+	double Res1 = 0;
+	double Res2 = 0;
+
+	for (int i = 0; i < size; i++)
+	{
+		double *x_test = alloc_arr(size);
+		x_test[i] = 1;
+		Mult_Au(n1, n2, n3, D, ldd, B, x_test, f1);
+		mkl_dcsrgemv("No", &size, Dcsr->values, Dcsr->ia, Dcsr->ja, x_test, f2);
+		//	print_vec(size, f1, f2, "f1 and f2");
+		rel_error(size, 1, f1, f2, size, thresh);
+		free(x_test);
+	}
+
+	free_arr(&f1);
+	free_arr(&f2);
+	free_arr(&g);
 }
 
 

@@ -1,5 +1,12 @@
 #pragma once
 
+/*********************************************
+Framework to test all functionalities,
+defined in BinaryTrees.cpp and functions.cpp,
+for working with compressed matrices
+(for example, Add, Mult, Inverse and etc.)
+*********************************************/
+
 #include "definitions.h"
 
 using namespace std;

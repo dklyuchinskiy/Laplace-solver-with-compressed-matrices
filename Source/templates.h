@@ -1,16 +1,16 @@
 #pragma once
 
+/****************************
+Prototypes for all functions.
+****************************/
+
 using namespace std;
 
+// functions.cpp
 // HSS
 
-void SymRecCompress(int n /* order of A */, double *A /* init matrix */, const int lda,
-	const int small_size, double eps,
-	char *method /* SVD or other */);
-
-void LowRankApprox(int n2, int n1 /* size of A21 = A */, double *A /* A is overwritten by U */, int lda,
-							double *V /* V is stored in A12 */, int ldv, int&p, double eps, char *method);
-
+void SymRecCompress(int n, double *A, const int lda, const int small_size, double eps, char *method);
+void LowRankApprox(int n2, int n1, double *A , int lda, double *V , int ldv, int&p, double eps, char *method);
 void SymResRestore(int n, double *H1, double *H2, int ldh, int p);
 void DiagMult(int n, double *A, int lda, double *d, int small_size);
 void RecMultL(int n, int m, double *A, int lda, double *X, int ldx, double *Y, int ldy, int smallsize);
@@ -20,16 +20,12 @@ void SymCompRecInv(int n, double *A, int lda, double *B, int ldb, int smallsize,
 
 // Solver
 
-void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3,
-	/* output */ double *D, int ldd, double *B, double *x1, double *f);
+void GenMatrixandRHSandSolution(const int n1, const int n2, const int n3, double *D, int ldd, double *B, double *x1, double *f);
 void Block3DSPDSolveFast(int n1, int n2, int n3, double *D, int ldd, double *B, double *f, double thresh, int smallsize, int ItRef, char *bench,
-	/* output */ double *G, int ldg, double *x, int &success, double &RelRes, int &itcount);
-
-void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, double *G /*factorized matrix*/, int ldg, double eps, int smallsize, char *bench);
+	 double *G, int ldg, double *x, int &success, double &RelRes, int &itcount);
+void DirFactFastDiag(int n1, int n2, int n3, double *D, int ldd, double *B, double *G, int ldg, double eps, int smallsize, char *bench);
 void DirSolveFastDiag(int n1, int n2, int n3, double *G, int ldg, double *B, double *f, double *x, double eps, int smallsize);
-
-void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z,
-	/* output */ double *D, int ldd, double *B, double *x1, double *f, double thresh);
+void GenMatrixandRHSandSolution2(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *x1, double *f, double thresh);
 
 
 // Support
@@ -61,9 +57,11 @@ void print_vec(int size, int *vec1, double *vec2, char *name);
 
 int compare_str(int n, char *s1, char *s2);
 int ind(int j, int n);
+
 map<vector<int>, double> dense_to_sparse(int m, int n, double *DD, int ldd, int *i_ind, int *j_ind, double *d);
 map<vector<int>, double> dense_to_CSR(int m, int n, double *A, int lda, int *ia, int *ja, double *values);
 map<vector<int>, double> block3diag_to_CSR(int n1, int n2, int blocks, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
+map<vector<int>, double> BlockRowMat_to_CSR(int blk, int n1, int n2, int n3, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr, int& non_zeros_on_prev_level);
 map<vector<int>, double> concat_maps(const map<vector<int>, double>& map1, const map<vector<int>, double>& map2);
 void construct_block_row(int m, int n, double* BL, int ldbl, double *A, int lda, double *BR, int ldbr, double* AR, int ldar);
 
@@ -78,31 +76,29 @@ void FreeNodes(int n, mnode* &Astr, int smallsize);
 void alloc_dense_node(int n, mnode* &Cstr);
 void PrintStruct(int n, mnode *root);
 
- // BinaryTrees - Solver
+// BinaryTrees.cpp
 
-void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
-	double *A /* A is overwritten by U */, int lda, mnode* &Astr, double eps, char *method);
-mnode* LowRankApproxStruct2(int n2, int n1 /* size of A21 = A */,
-	double *A /* A is overwritten by U */, int lda, double eps, char *method);
+// Solver
+void LowRankApproxStruct(int n2, int n1, double *A, int lda, mnode* &Astr, double eps, char *method);
+mnode* LowRankApproxStruct2(int n2, int n1, double *A, int lda, double eps, char *method);
 void SymRecCompressStruct(int n, double *A, const int lda, mnode* &ACstr, const int smallsize, double eps, char *method);
-void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ldh, int smallsize);
+void SymResRestoreStruct(int n, mnode* H1str, double *H2, int ldh, int smallsize);
 void DiagMultStruct(int n, mnode* Astr, double *d, int small_size);
 void RecMultLStruct(int n, int m, mnode* Astr, double *X, int ldx, double *Y, int ldy, int smallsize);
 void AddStruct(int n, double alpha, mnode* Astr, double beta, mnode* Bstr, mnode* &Cstr, int smallsize, double eps, char *method);
 void SymCompUpdate2Struct(int n, int k, mnode* Astr, double alpha, double *Y, int ldy, double *V, int ldv, mnode* &Bstr, int smallsize, double eps, char* method);
 void SymCompRecInvStruct(int n, mnode* Astr, mnode* &Bstr, int smallsize, double eps, char *method);
 void DirSolveFastDiagStruct(int n1, int n2, int n3, mnode* *Gstr, double *B, double *f, double *x, double eps, int smallsize);
-void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B, mnode** &Gstr,
+void DirFactFastDiagStruct(int n1, int n2, int n3, double *D, int ldd, double *B, mnode** &Gstr, 
 	double eps, int smallsize, char *bench);
 void DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** &Gstr, double *B, double thresh, int smallsize, char *bench);
-void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench,
-	/* output */ 	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount);
+void Block3DSPDSolveFastStruct(size_m x, size_m y, size_m z, double *D, int ldd, double *B, double *f, dcsr* Dcsr, double thresh, int smallsize, int ItRef, char *bench, 
+	mnode** &Gstr, double *x_sol, int &success, double &RelRes, int &itcount);
 void ResidCSR(int n1, int n2, int n3, dcsr* Dcsr, double* x_sol, double *f, double* g, double &RelRes);
 void GenSparseMatrix(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
 void GenerateDiagonal2DBlock(int part_of_field, size_m x, size_m y, size_m z, double *DD, int lddd);
-void GenRHSandSolution(size_m x, size_m y, size_m z, double *u, double *f);
-map <vector<int>, double> BlockRowMat_to_CSR(int blk, int n1, int n2, int n3, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr, int& non_zeros_on_prev_level);
-void GenSparseMatrix2(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
+void GenRHSandSolution(size_m x, size_m y, size_m z, double* B, double *u, double *f);
+void GenSparseMatrixOnline(size_m x, size_m y, size_m z, double *BL, int ldbl, double *A, int lda, double *BR, int ldbr, dcsr* Acsr);
 void count_dense_elements(int m, int n, double *A, int lda, int& non_zeros);
 
 // Queue
