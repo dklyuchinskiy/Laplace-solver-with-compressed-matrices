@@ -2,6 +2,12 @@
 #include "templates.h"
 #include "TestSuite.h"
 
+/*********************************
+Implementation of Queue by List.
+(We are going to use it later 
+in PrintRanksInWidth function)
+*********************************/
+
 void init(struct my_queue* &q)
 {
 	q = (struct my_queue*)malloc(sizeof(struct my_queue));
