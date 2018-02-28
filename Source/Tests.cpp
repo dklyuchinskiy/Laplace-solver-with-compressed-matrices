@@ -259,6 +259,9 @@ void Test_DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** Gstr
 	double *DR = alloc_arr(n * n); int lddr = n;
 	double norm = 0;
 
+	double timer = 0;
+	timer = omp_get_wtime();
+
 	GenerateDiagonal2DBlock(0, x, y, z, DD, lddd);
 
 	mnode *DCstr;
@@ -290,8 +293,9 @@ void Test_DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** Gstr
 		SymResRestoreStruct(n, Hstr, HR, ldhr, smallsize);
 
 		// Norm of residual
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
+#pragma omp simd
 			for (int i = 0; i < n; i++)
 				HR[i + ldhr * j] = HR[i + ldhr * j] + DR[i + lddr * j];
 
@@ -305,6 +309,8 @@ void Test_DirFactFastDiagStructOnline(size_m x, size_m y, size_m z, mnode** Gstr
 		free_arr(&DR);
 		free_arr(&HR);
 	}
+	timer = omp_get_wtime() - timer;
+	printf("Time: %lf\n", timer);
 
 	free_arr(&DD);
 
@@ -340,13 +346,33 @@ void Test_DirSolveFactDiagStructConvergence(size_m x, size_m y, size_m z, mnode*
 void Test_DirSolveFactDiagStructBlockRanks(size_m x, size_m y, size_m z, mnode** Gstr)
 {
 	printf("----------Trees information-----------\n");
+	int *size = (int*)malloc(x.n * sizeof(int));
+	int *depth = (int*)malloc(y.n * sizeof(int));
+
+	double time = omp_get_wtime();
+	for (int i = 0; i < z.n; i++)
+	{
+#pragma omp parallel
+		{
+#pragma omp single
+			{
+				size[i] = TreeSize(Gstr[i]);
+				depth[i] = MaxDepth(Gstr[i]);
+			}
+		}
+	}
+	double result = omp_get_wtime() - time;
+	printf("Computational time of TreeSize and MaxDepth for all %d trees: %lf\n", x.n, result);
 
 	for (int i = 0; i < z.n; i++)
 	{
-		printf("For block %2d. Size: %d, MaxDepth: %d, Ranks: ", i, TreeSize(Gstr[i]), MaxDepth(Gstr[i]));
+		printf("For block %2d. Size: %d, MaxDepth: %d, Ranks: ", i, size[i], depth[i]);
 		PrintRanksInWidthList(Gstr[i]);
 		printf("\n");
 	}
+
+	free(size);
+	free(depth);
 
 }
 

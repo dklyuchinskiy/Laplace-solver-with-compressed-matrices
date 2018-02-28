@@ -828,14 +828,11 @@ double rel_error(int n, int k, double *Hrec, double *Hinit, int ldh, double eps)
 	double norm = 0;
 
 	// Norm of residual
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(static)
 	for (int j = 0; j < k; j++)
-	{
+#pragma omp simd
 		for (int i = 0; i < n; i++)
-		{
 			Hrec[i + ldh * j] = Hrec[i + ldh * j] - Hinit[i + ldh * j];
-		}
-	}
 
 	norm = dlange("Frob", &n, &k, Hrec, &ldh, NULL);
 	norm = norm / dlange("Frob", &n, &k, Hinit, &ldh, NULL);
@@ -1187,7 +1184,7 @@ void Eye(int n, double *H, int ldh)
 
 void Diag(int n, double *H, int ldh, double value)
 {
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 	for (int j = 0; j < n; j++)
 #pragma omp simd
 		for (int i = 0; i < n; i++)
@@ -1198,7 +1195,7 @@ void Diag(int n, double *H, int ldh, double value)
 
 void Hilbert(int n, double *H, int ldh)
 {
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 	for (int j = 0; j < n; j++)
 #pragma omp simd
 		for (int i = 0; i < n; i++)
@@ -1207,10 +1204,10 @@ void Hilbert(int n, double *H, int ldh)
 
 void Mat_Trans(int m, int n, double *H, int ldh, double *Hcomp_tr, int ldhtr)
 {
-#pragma omp parallel for schedule(dynamic)
-	for (int j = 0; j < n; j++)
+#pragma omp parallel for schedule(static)
+	for (int i = 0; i < m; i++)
 #pragma omp simd
-		for (int i = 0; i < m; i++)
+		for (int j = 0; j < n; j++)
 			Hcomp_tr[j + ldhtr * i] = H[i + ldh * j];
 }
 
@@ -1220,7 +1217,7 @@ void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, doub
 
 	if (beta == dzero)
 	{
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
 #pragma omp simd
 			for (int i = 0; i < m; i++)
@@ -1228,7 +1225,7 @@ void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, doub
 	}
 	else if (alpha == dzero)
 	{
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
 #pragma omp simd
 			for (int i = 0; i < m; i++)
@@ -1236,7 +1233,7 @@ void Add_dense(int m, int n, double alpha, double *A, int lda, double beta, doub
 	}
 	else
 	{
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
 #pragma omp simd
 			for (int i = 0; i < m; i++)
@@ -1248,7 +1245,7 @@ void op_mat(int m, int n, double *Y11, double *Y12, int ldy, char sign)
 {
 	if (sign == '+')
 	{
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
 #pragma omp simd
 			for (int i = 0; i < m; i++)
@@ -1256,7 +1253,7 @@ void op_mat(int m, int n, double *Y11, double *Y12, int ldy, char sign)
 	}
 	else if (sign == '-')
 	{
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
 #pragma omp simd
 			for (int i = 0; i < m; i++)

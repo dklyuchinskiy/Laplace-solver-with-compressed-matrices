@@ -25,7 +25,17 @@ int TreeSize(mnode* root)
 	}
 	else
 	{
-		return TreeSize(root->left) + 1 + TreeSize(root->right);
+		int ld = 0, rd = 0;
+#pragma omp task shared(ld)
+		{
+			ld = TreeSize(root->left);
+		}
+#pragma omp task shared(rd)
+		{
+			rd = TreeSize(root->right);
+		}
+#pragma omp taskwait
+		return ld + 1 + rd;
 	}
 
 }
@@ -38,9 +48,16 @@ int MaxDepth(mnode* root)
 	}
 	else
 	{
-		int ld = MaxDepth(root->left);
-		int rd = MaxDepth(root->right);
-
+		int ld = 0, rd = 0;
+#pragma omp task shared(ld)
+		{
+			ld = MaxDepth(root->left);
+		}
+#pragma omp task shared(rd)
+		{
+			rd = MaxDepth(root->right);
+		}
+#pragma omp taskwait
 		if (ld > rd) return (ld + 1); // + root node
 		else return (rd + 1);
 	}
@@ -91,7 +108,6 @@ void PrintRanksInWidthList(mnode *root)
 	{
 		return;
 	}
-	int count = 0;
 	struct my_queue* q; // Создаем очередь
 	init(q);
 	push(q, root); // Вставляем корень в очередь
@@ -105,17 +121,11 @@ void PrintRanksInWidthList(mnode *root)
 		pop(q);  // Удаляем первый элемент в очереди
 		printf("%3d ", temp->p); // Печатаем значение первого элемента в очереди
 
-		if (temp->left != NULL)
-		{
+		if (temp->left != NULL) 
 			push(q, temp->left);  // Вставляем  в очередь левого потомка
-			count++;
-		}
 
-		if (temp->right != NULL)
-		{
+		if (temp->right != NULL) 
 			push(q, temp->right);  // Вставляем  в очередь правого потомка
-			count++;
-		}
 #ifdef DEBUG
 		print_queue(q);
 #endif
@@ -184,6 +194,7 @@ void LowRankApproxStruct(int n2, int n1 /* size of A21 = A */,
 			}
 			Astr->p = j + 1;
 #ifndef FULL_SVD
+#pragma omp parallel for simd schedule(simd:static)
 			for (int i = 0; i < n2; i++)
 				A[i + lda * j] *= S[j];
 #else
@@ -326,11 +337,11 @@ void SymResRestoreStruct(int n, mnode* H1str, double *H2 /* recovered */, int ld
 /* Рекурсивная функция вычисления DAD, где D - диагональная матрица, а Astr - сжатая в структуре */
 void DiagMultStruct(int n, mnode* Astr, double *d, int smallsize)
 {
-
 	if (n <= smallsize) 
 	{
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n; j++)
+#pragma omp simd
 			for (int i = 0; i < n; i++)
 			{
 				Astr->A[i + j * n] *= d[j]; // справа D - каждый j - ый столбец A умножается на d[j]
@@ -346,14 +357,16 @@ void DiagMultStruct(int n, mnode* Astr, double *d, int smallsize)
 		DiagMultStruct(n2, Astr->right, &d[n1], smallsize);
 
 		// D * U - каждая i-ая строка U умножается на элемент вектора d[i]
-#pragma omp parallel for simd schedule(simd:static)
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < Astr->p; j++)
+#pragma omp simd
 			for (int i = 0; i < n2; i++)
 				Astr->U[i + n2 * j] *= d[n1 + i]; // вторая часть массива D
 
-														// VT * D - каждый j-ый столбец умножается на элемент вектора d[j]
-#pragma omp parallel for simd schedule(simd:static)
+		// VT * D - каждый j-ый столбец умножается на элемент вектора d[j]
+#pragma omp parallel for schedule(static)
 		for (int j = 0; j < n1; j++)
+#pragma omp simd
 			for (int i = 0; i < Astr->p; i++)
 				Astr->VT[i + Astr->p * j] *= d[j];
 		// так так вектора матрицы V из разложения A = U * V лежат в транспонированном порядке,
